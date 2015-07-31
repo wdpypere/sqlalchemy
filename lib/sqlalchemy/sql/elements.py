@@ -2802,6 +2802,7 @@ class BinaryExpression(ColumnElement):
 class IndexExpression(BinaryExpression):
     """Represent the class of expressions that are like an "index" operation.
     """
+    pass
 
 
 class Grouping(ColumnElement):

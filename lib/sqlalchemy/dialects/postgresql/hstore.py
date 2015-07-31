@@ -347,8 +347,7 @@ class HStoreElement(elements.IndexExpression):
         "->", precedence=5, natural_self_precedent=True
     )
 
-    def __init__(self, left, right, astext=False):
-        self._astext = astext
+    def __init__(self, left, right):
         operator = self.INDEX
         right = default_comparator._check_literal(
             left, operator, right)
