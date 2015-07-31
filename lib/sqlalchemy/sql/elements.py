@@ -2799,6 +2799,11 @@ class BinaryExpression(ColumnElement):
             return super(BinaryExpression, self)._negate()
 
 
+class IndexExpression(BinaryExpression):
+    """Represent the class of expressions that are like an "index" operation.
+    """
+
+
 class Grouping(ColumnElement):
     """Represent a grouping within a column expression"""
 

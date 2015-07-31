@@ -10,6 +10,8 @@ import re
 from .base import ARRAY, ischema_names
 from ... import types as sqltypes
 from ...sql import functions as sqlfunc
+from ...sql import elements
+from ...sql import default_comparator
 from ...sql.operators import custom_op
 from ... import util
 
@@ -226,10 +228,9 @@ class HSTORE(sqltypes.Concatenable, sqltypes.TypeEngine):
             return self.expr.op('<@')(other)
 
         def __getitem__(self, other):
-            """Text expression.  Get the value at a given key.  Note that the
-            key may be a SQLA expression.
-            """
-            return self.expr.op('->', precedence=5)(other)
+            """Get the value at a given key."""
+
+            return HStoreElement(self.expr, other)
 
         def delete(self, key):
             """HStore expression.  Returns the contents of this hstore with the
@@ -339,6 +340,20 @@ class hstore(sqlfunc.GenericFunction):
     """
     type = HSTORE
     name = 'hstore'
+
+
+class HStoreElement(elements.IndexExpression):
+    INDEX = custom_op(
+        "->", precedence=5, natural_self_precedent=True
+    )
+
+    def __init__(self, left, right, astext=False):
+        self._astext = astext
+        operator = self.INDEX
+        right = default_comparator._check_literal(
+            left, operator, right)
+        super(HStoreElement, self).__init__(
+            left, right, operator, type_=sqltypes.String())
 
 
 class _HStoreDefinedFunction(sqlfunc.GenericFunction):

@@ -18,7 +18,7 @@ from ... import util
 __all__ = ('JSON', 'JSONElement', 'JSONB')
 
 
-class JSONElement(elements.BinaryExpression):
+class JSONElement(elements.IndexExpression):
     """Represents accessing an element of a :class:`.JSON` value.
 
     The :class:`.JSONElement` is produced whenever using the Python index
@@ -32,20 +32,37 @@ class JSONElement(elements.BinaryExpression):
 
     """
 
-    def __init__(self, left, right, astext=False,
-                 opstring=None, result_type=None):
-        self._astext = astext
-        if opstring is None:
-            if hasattr(right, '__iter__') and \
-                    not isinstance(right, util.string_types):
-                opstring = "#>"
-                right = "{%s}" % (
-                    ", ".join(util.text_type(elem) for elem in right))
-            else:
-                opstring = "->"
+    INDEX = custom_op(
+        "->", precedence=5, natural_self_precedent=True
+    )
+    ARRAYIDX = custom_op(
+        "#>", precedence=5, natural_self_precedent=True
+    )
+    ASTEXT = custom_op(
+        "->>", precedence=5, natural_self_precedent=True
+    )
+    ASTEXT_ARRAYIDX = custom_op(
+        "#>>", precedence=5, natural_self_precedent=True
+    )
 
-        self._json_opstring = opstring
-        operator = custom_op(opstring, precedence=5)
+    _ASTEXT_OPS = set([ASTEXT, ASTEXT_ARRAYIDX])
+    _ARRIDX_OPS = set([ARRAYIDX, ASTEXT_ARRAYIDX])
+
+    def __init__(self, left, right, operator, result_type=None):
+        if hasattr(right, '__iter__') and \
+                not isinstance(right, util.string_types):
+            right = "{%s}" % (
+                ", ".join(util.text_type(elem) for elem in right))
+
+            if operator is self.INDEX:
+                operator = self.ARRAYIDX
+            elif operator is self.ASTEXT:
+                operator = self.ASTEXT_ARRAYIDX
+
+        self._json_opstring = operator.opstring
+        self._astext = operator in self._ASTEXT_OPS
+        self._isarrayidx = operator in self._ARRIDX_OPS
+
         right = default_comparator._check_literal(
             left, operator, right)
         super(JSONElement, self).__init__(
@@ -71,8 +88,8 @@ class JSONElement(elements.BinaryExpression):
             return JSONElement(
                 self.left,
                 self.right,
-                astext=True,
-                opstring=self._json_opstring + ">",
+                self.ASTEXT_ARRAYIDX if self.operator is self.ARRAYIDX
+                else self.ASTEXT,
                 result_type=sqltypes.String(convert_unicode=True)
             )
 
@@ -190,7 +207,9 @@ class JSON(sqltypes.TypeEngine):
         def __getitem__(self, other):
             """Get the value at a given key."""
 
-            return JSONElement(self.expr, other)
+            return JSONElement(
+                self.expr, other, JSONElement.INDEX,
+                result_type=self.expr.type)
 
         def _adapt_expression(self, op, other_comparator):
             if isinstance(op, custom_op):
@@ -309,13 +328,8 @@ class JSONB(JSON):
 
     __visit_name__ = 'JSONB'
 
-    class comparator_factory(sqltypes.Concatenable.Comparator):
+    class comparator_factory(JSON.comparator_factory):
         """Define comparison operations for :class:`.JSON`."""
-
-        def __getitem__(self, other):
-            """Get the value at a given key."""
-
-            return JSONElement(self.expr, other)
 
         def _adapt_expression(self, op, other_comparator):
             # How does one do equality?? jsonb also has "=" eg.
