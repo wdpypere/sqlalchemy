@@ -1071,6 +1071,11 @@ class ARRAY(sqltypes.Concatenable, sqltypes.TypeEngine):
         self.zero_indexes = zero_indexes
 
     @property
+    def hashable(self):
+        return self.as_tuple
+
+
+    @property
     def python_type(self):
         return list
 

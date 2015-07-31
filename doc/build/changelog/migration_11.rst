@@ -66,6 +66,47 @@ as it relies on deprecated features of setuptools.
 New Features and Improvements - ORM
 ===================================
 
+.. _change_3499:
+
+Changes regarding "unhashable" types
+------------------------------------
+
+The :class:`.Query` object has a well-known behavior of "deduping"
+returned rows that contain at least one ORM-mapped entity (e.g., a
+full mapped object, as opposed to individual column values). The
+primary purpose of this is so that the handling of entities works
+smoothly in conjunction with the identity map, including to
+accommodate for the duplicate entities normally represented within
+joined eager loading, as well as when joins are used for the purposes
+of filtering on additional columns.
+
+This deduplication relies upon the hashability of the elements within
+the row.  With the introduction of Postgresql's special types like
+:class:`.postgresql.ARRAY`, :class:`.postgresql.HSTORE` and
+:class:`.postgresql.JSON`, the experience of types within rows being
+unhashable and encountering problems here is more prevalent than
+it was previously.
+
+In fact, SQLAlchemy has since version 0.8 included a flag on datatypes that
+are noted as "unhashable", however this flag was not used consistently
+on built in types.  As described in :ref:`change_3499_postgresql`, this
+flag is now set consistently for all of Postgresql's "structural" types.
+
+
+The "unhashable" flag is also set on the :class:`.NullType` type.  This
+is key, as :class:`.NullType` is used to refer to any expression of unknown
+type.  In particular, the Postgresql types deal a lot with this type
+as the return value of any indexed accessor from a :class:`.JSON` type
+defaults to :class:`.NullType`, unless the new "type_schema" feature
+is used; see :ref:`change_3503` for details.
+
+Additionally, the treatment of a so-called "unhashable" type is slightly
+different than its been in previous releases; internally we are using
+the ``id()`` function to get a "hash value" from these structures, just
+as we would any ordinary mapped object.   This replaces the previous
+approach which applied a counter to the object.
+
+:ticket:`3499`
 
 New Features and Improvements - Core
 ====================================
@@ -81,6 +122,44 @@ Key Behavioral Changes - Core
 
 Dialect Improvements and Changes - Postgresql
 =============================================
+
+.. _change_3499_postgresql:
+
+ARRAY and JSON types now correctly specify "unhashable"
+-------------------------------------------------------
+
+As described in :ref:`change_3499`, the ORM relies upon being able to
+produce a hash function for column values when a query's selected entities
+mixes full ORM entities with column expressions.   The ``hashable=False``
+flag is now correctly set on all of PG's "data structure" types, including
+:class:`.ARRAY` and :class:`.JSON`.  The :class:`.JSONB` and :class:`.HSTORE`
+types already included this flag.  For :class:`.ARRAY`,
+this is conditional based on the :paramref:`.postgresql.ARRAY.as_tuple`
+flag, however it should no longer be necessary to set this flag
+in order to have an array value present in a composed ORM row.
+
+Additionally, the type of an expression derived from indexed access
+of a :class:`.JSON` or :class:`.JSONB` type defaults to :class:`.NullType`,
+unless the new "type_schema" feature described in :ref:`change_3503` is used
+to define return types.  The change includes that :class:`.NullType` also
+properly defines ``hashable=False`` so that a sub-list or sub-dictionary
+returned by an index-accessed expression will by default not attempt
+to be hashed.
+
+.. seealso::
+
+    :ref:`change_3499`
+
+    :ref:`change_3503`
+
+:ticket:`3499`
+
+
+ARRAY, JSON, HSTORE, JSONB marked 'unhashable', to allow ORM queries to proceed
+-------------------------------------------------------------------------------
+
+This change will assist in these types being used in ORM queries without
+special steps; see the section :ref:`change_3499` for the full details.
 
 
 Dialect Improvements and Changes - MySQL

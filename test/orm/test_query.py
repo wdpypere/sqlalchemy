@@ -1960,13 +1960,6 @@ class FilterTest(QueryTest, AssertsCompiledSQL):
             sess.query(User). \
             filter(User.addresses.any(email_address='fred@fred.com')).all()
 
-        # test that any() doesn't overcorrelate
-        assert [User(id=7), User(id=8)] == \
-            sess.query(User).join("addresses"). \
-            filter(
-                ~User.addresses.any(
-                    Address.email_address == 'fred@fred.com')).all()
-
         # test that the contents are not adapted by the aliased join
         assert [User(id=7), User(id=8)] == \
             sess.query(User).join("addresses", aliased=True). \
@@ -1977,6 +1970,18 @@ class FilterTest(QueryTest, AssertsCompiledSQL):
         assert [User(id=10)] == \
             sess.query(User).outerjoin("addresses", aliased=True). \
             filter(~User.addresses.any()).all()
+
+    def test_any_doesnt_overcorrelate(self):
+        User, Address = self.classes.User, self.classes.Address
+
+        sess = create_session()
+
+        # test that any() doesn't overcorrelate
+        assert [User(id=7), User(id=8)] == \
+            sess.query(User).join("addresses"). \
+            filter(
+                ~User.addresses.any(
+                    Address.email_address == 'fred@fred.com')).all()
 
     def test_has(self):
         Dingaling, User, Address = (

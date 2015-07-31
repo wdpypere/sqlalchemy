@@ -165,6 +165,8 @@ class JSON(sqltypes.TypeEngine):
 
     __visit_name__ = 'JSON'
 
+    hashable = False
+
     def __init__(self, none_as_null=False):
         """Construct a :class:`.JSON` type.
 
@@ -306,7 +308,6 @@ class JSONB(JSON):
     """
 
     __visit_name__ = 'JSONB'
-    hashable = False
 
     class comparator_factory(sqltypes.Concatenable.Comparator):
         """Define comparison operations for :class:`.JSON`."""
