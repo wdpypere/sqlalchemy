@@ -12,8 +12,9 @@ from sqlalchemy import exc
 from sqlalchemy.engine import default
 from sqlalchemy.sql.elements import _literal_as_text
 from sqlalchemy.schema import Column, Table, MetaData
+from sqlalchemy.sql import compiler
 from sqlalchemy.types import TypeEngine, TypeDecorator, UserDefinedType, \
-    Boolean, NullType, MatchType
+    Boolean, NullType, MatchType, Indexable
 from sqlalchemy.dialects import mysql, firebird, postgresql, oracle, \
     sqlite, mssql
 from sqlalchemy import util
@@ -21,7 +22,6 @@ import datetime
 import collections
 from sqlalchemy import text, literal_column
 from sqlalchemy import and_, not_, between, or_
-from sqlalchemy.sql import true, false, null
 
 
 class LoopOperate(operators.ColumnOperators):
@@ -574,6 +574,159 @@ class ExtensionOperatorTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         self.assert_compile(
             Column('x', MyType()) >> 5,
             "x -> :x_1"
+        )
+
+
+class IndexableTest(fixtures.TestBase, testing.AssertsCompiledSQL):
+    def setUp(self):
+        class MyTypeCompiler(compiler.GenericTypeCompiler):
+            def visit_mytype(self, type, **kw):
+                return "MYTYPE"
+
+            def visit_myothertype(self, type, **kw):
+                return "MYOTHERTYPE"
+
+        class MyCompiler(compiler.SQLCompiler):
+            def visit_slice(self, element, **kw):
+                return "%s:%s" % (
+                    self.process(element.start, **kw),
+                    self.process(element.stop, **kw),
+                )
+
+            def visit_getitem_binary(self, binary, operator, **kw):
+                return "%s[%s]" % (
+                    self.process(binary.left, **kw),
+                    self.process(binary.right, **kw)
+                )
+
+        class MyDialect(default.DefaultDialect):
+            statement_compiler = MyCompiler
+            type_compiler = MyTypeCompiler
+
+        class MyType(Indexable, TypeEngine):
+            __visit_name__ = 'mytype'
+
+            def __init__(self, zero_indexes=False):
+                if zero_indexes:
+                    self.zero_indexes = zero_indexes
+
+        self.MyType = MyType
+        self.__dialect__ = MyDialect()
+
+    def test_getindex_literal(self):
+
+        col = Column('x', self.MyType())
+
+        self.assert_compile(
+            col[5],
+            "x[:x_1]",
+            checkparams={'x_1': 5}
+        )
+
+    def test_getindex_sqlexpr(self):
+
+        col = Column('x', self.MyType())
+        col2 = Column('y', Integer())
+
+        self.assert_compile(
+            col[col2],
+            "x[y]",
+            checkparams={}
+        )
+
+        self.assert_compile(
+            col[col2 + 8],
+            "x[(y + :y_1)]",
+            checkparams={'y_1': 8}
+        )
+
+    def test_getslice_literal(self):
+
+        col = Column('x', self.MyType())
+
+        self.assert_compile(
+            col[5:6],
+            "x[:x_1::x_2]",
+            checkparams={'x_1': 5, 'x_2': 6}
+        )
+
+    def test_getslice_sqlexpr(self):
+
+        col = Column('x', self.MyType())
+        col2 = Column('y', Integer())
+
+        self.assert_compile(
+            col[col2:col2 + 5],
+            "x[y:y + :y_1]",
+            checkparams={'y_1': 5}
+        )
+
+    def test_getindex_literal_zeroind(self):
+
+        col = Column('x', self.MyType(zero_indexes=True))
+
+        self.assert_compile(
+            col[5],
+            "x[:x_1]",
+            checkparams={'x_1': 6}
+        )
+
+    def test_getindex_sqlexpr_zeroind(self):
+
+        col = Column('x', self.MyType(zero_indexes=True))
+        col2 = Column('y', Integer())
+
+        self.assert_compile(
+            col[col2],
+            "x[(y + :y_1)]",
+            checkparams={'y_1': 1}
+        )
+
+        self.assert_compile(
+            col[col2 + 8],
+            "x[(y + :y_1 + :param_1)]",
+            checkparams={'y_1': 8, 'param_1': 1}
+        )
+
+    def test_getslice_literal_zeroind(self):
+
+        col = Column('x', self.MyType(zero_indexes=True))
+
+        self.assert_compile(
+            col[5:6],
+            "x[:x_1::x_2]",
+            checkparams={'x_1': 6, 'x_2': 7}
+        )
+
+    def test_getslice_sqlexpr_zeroind(self):
+
+        col = Column('x', self.MyType(zero_indexes=True))
+        col2 = Column('y', Integer())
+
+        self.assert_compile(
+            col[col2:col2 + 5],
+            "x[y + :y_1:y + :y_2 + :param_1]",
+            checkparams={'y_1': 1, 'y_2': 5, 'param_1': 1}
+        )
+
+    def test_override_operators(self):
+        special_index_op = operators.custom_op('->')
+
+        class MyOtherType(Indexable, TypeEngine):
+            __visit_name__ = 'myothertype'
+
+            class Comparator(TypeEngine.Comparator):
+
+                def _adapt_expression(self, op, other_comparator):
+                    return special_index_op, MyOtherType()
+
+            comparator_factory = Comparator
+
+        col = Column('x', MyOtherType())
+        self.assert_compile(
+            col[5],
+            "x -> :x_1",
+            checkparams={'x_1': 5}
         )
 
 
