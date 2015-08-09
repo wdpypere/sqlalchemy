@@ -11,7 +11,7 @@ from sqlalchemy import Table, MetaData, Column, Integer, Enum, Float, select, \
 from sqlalchemy.sql import operators
 from sqlalchemy import types
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import base as postgresql
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import HSTORE, hstore, array, \
     INT4RANGE, INT8RANGE, NUMRANGE, DATERANGE, TSRANGE, TSTZRANGE, \
     JSON, JSONB

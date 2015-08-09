@@ -7,7 +7,8 @@
 
 import re
 
-from .base import ARRAY, ischema_names
+from .base import ischema_names
+from .array import ARRAY
 from ... import types as sqltypes
 from ...sql import functions as sqlfunc
 from ...sql import elements

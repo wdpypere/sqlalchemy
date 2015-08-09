@@ -12,11 +12,13 @@ base.dialect = psycopg2.dialect
 from .base import \
     INTEGER, BIGINT, SMALLINT, VARCHAR, CHAR, TEXT, NUMERIC, FLOAT, REAL, \
     INET, CIDR, UUID, BIT, MACADDR, OID, DOUBLE_PRECISION, TIMESTAMP, TIME, \
-    DATE, BYTEA, BOOLEAN, INTERVAL, ARRAY, ENUM, dialect, array, Any, All, \
-    TSVECTOR, DropEnumType
+    DATE, BYTEA, BOOLEAN, INTERVAL, ENUM, dialect, TSVECTOR, DropEnumType, \
+    CreateEnumType
 from .constraints import ExcludeConstraint
 from .hstore import HSTORE, hstore
 from .json import JSON, JSONElement, JSONB
+from .array import array, ARRAY, Any, All
+
 from .ranges import INT4RANGE, INT8RANGE, NUMRANGE, DATERANGE, TSRANGE, \
     TSTZRANGE
 
@@ -27,5 +29,5 @@ __all__ = (
     'INTERVAL', 'ARRAY', 'ENUM', 'dialect', 'Any', 'All', 'array', 'HSTORE',
     'hstore', 'INT4RANGE', 'INT8RANGE', 'NUMRANGE', 'DATERANGE',
     'TSRANGE', 'TSTZRANGE', 'json', 'JSON', 'JSONB', 'JSONElement',
-    'DropEnumType'
+    'DropEnumType', 'CreateEnumType'
 )
