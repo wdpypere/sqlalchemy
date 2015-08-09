@@ -15,18 +15,6 @@ except ImportError:
     _python_UUID = None
 
 
-class _Slice(expression.ColumnElement):
-    __visit_name__ = 'slice'
-    type = sqltypes.NULLTYPE
-
-    def __init__(self, slice_, source_comparator):
-        self.start = default_comparator._check_literal(
-            source_comparator.expr,
-            operators.getitem, slice_.start)
-        self.stop = default_comparator._check_literal(
-            source_comparator.expr,
-            operators.getitem, slice_.stop)
-
 
 class Any(expression.ColumnElement):
 
@@ -121,7 +109,7 @@ class array(expression.Tuple):
         return self
 
 
-class ARRAY(sqltypes.Concatenable, sqltypes.TypeEngine):
+class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     """Postgresql ARRAY type.
 
@@ -210,25 +198,6 @@ class ARRAY(sqltypes.Concatenable, sqltypes.TypeEngine):
     class Comparator(sqltypes.Concatenable.Comparator):
 
         """Define comparison operations for :class:`.ARRAY`."""
-
-        def __getitem__(self, index):
-            shift_indexes = 1 if self.expr.type.zero_indexes else 0
-            if isinstance(index, slice):
-                if shift_indexes:
-                    index = slice(
-                        index.start + shift_indexes,
-                        index.stop + shift_indexes,
-                        index.step
-                    )
-                index = _Slice(index, self)
-                return_type = self.type
-            else:
-                index += shift_indexes
-                return_type = self.type.item_type
-
-            return default_comparator._binary_operate(
-                self.expr, operators.getitem, index,
-                result_type=return_type)
 
         def any(self, other, operator=operators.eq):
             """Return ``other operator ANY (array)`` clause.

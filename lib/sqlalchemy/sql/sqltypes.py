@@ -73,6 +73,17 @@ class Concatenable(object):
     comparator_factory = Comparator
 
 
+class Indexable(object):
+    """A mixin that marks a type as supporting indexing operations,
+    such as array or JSON structures.
+
+    """
+
+    zero_indexes = False
+    """if True, Python zero-based indexes should be interpreted as one-based
+    on the SQL expression side."""
+
+
 class String(Concatenable, TypeEngine):
 
     """The base for all string and character types.
@@ -1714,6 +1725,7 @@ type_api.STRINGTYPE = STRINGTYPE
 type_api.INTEGERTYPE = INTEGERTYPE
 type_api.NULLTYPE = NULLTYPE
 type_api.MATCHTYPE = MATCHTYPE
+type_api.INDEXABLE = Indexable
 type_api._type_map = _type_map
 
 TypeEngine.Comparator.BOOLEANTYPE = BOOLEANTYPE
