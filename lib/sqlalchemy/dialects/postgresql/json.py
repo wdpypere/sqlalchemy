@@ -111,7 +111,7 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
     hashable = False
 
-    def __init__(self, none_as_null=False):
+    def __init__(self, none_as_null=False, index_map=None):
         """Construct a :class:`.JSON` type.
 
         :param none_as_null: if True, persist the value ``None`` as a
@@ -125,22 +125,22 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
          .. versionchanged:: 0.9.8 - Added ``none_as_null``, and :func:`.null`
             is now supported in order to persist a NULL value.
 
+        :param index_map: type map used by the getitem operator, e.g.
+         expressions like ``col[5]``.  See :class:`.Indexable` for a
+         description of how this map is configured.   The index_map
+         for the :class:`.JSON` and :class:`.JSONB` types defaults to
+         ``{ANY_KEY: SAME_TYPE}``.
+
+         .. versionadded: 1.1
+
          """
         self.none_as_null = none_as_null
+        if index_map is not None:
+            self.index_map = index_map
 
-    class Comparator(sqltypes.Concatenable.Comparator):
+    class Comparator(
+            sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
         """Define comparison operations for :class:`.JSON`."""
-
-        def __init__(self, expr, astext=False, aspath=False):
-            super(JSON.comparator_factory, self).__init__(expr)
-            self._astext = astext
-            self._aspath = aspath
-
-        def _clone(self, astext=False, aspath=False):
-            return self.__class__(
-                self.expr,
-                astext=self._astext or astext,
-                aspath=self._aspath or aspath)
 
         @property
         def astext(self):
@@ -156,37 +156,25 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
                 :meth:`.ColumnElement.cast`
 
             """
-            if self._astext:
-                return self
+            against = self.expr.operator
+            if against is PATHIDX:
+                against = ASTEXT_PATHIDX
             else:
-                return self._clone(astext=True)
+                against = ASTEXT
 
-        def __getitem__(self, index):
-            if isinstance(index, collections.Sequence):
+            return self.expr.left.operate(
+                against, self.expr.right, result_type=sqltypes.Text)
+
+        def _setup_getitem(self, index):
+            if not isinstance(index, util.string_types):
+                assert isinstance(index, collections.Sequence)
                 index = "{%s}" % (
                     ", ".join(util.text_type(elem) for elem in index))
-                aspath = True
+                operator = PATHIDX
             else:
-                aspath = False
-            return self.operate(operators.getitem, index, aspath=aspath)
+                operator = INDEX
 
-        def _adapt_expression(self, op, other_comparator):
-            if op is operators.getitem:
-                if self._astext:
-                    if self._aspath:
-                        return ASTEXT_PATHIDX, sqltypes.Text
-                    else:
-                        return ASTEXT, sqltypes.Text
-                else:
-                    if self._aspath:
-                        # TODO: consult index map
-                        return PATHIDX, self.type
-                    else:
-                        # TODO: consult index map
-                        return INDEX, self.type
-            else:
-                return super(JSON.comparator_factory, self)._adapt_expression(
-                    op, other_comparator)
+            return operator, index, self._type_for_index(index)
 
     comparator_factory = Comparator
 
