@@ -6,14 +6,13 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 
 from .base import ischema_names
-from ...sql import expression, operators, default_comparator
+from ...sql import expression, operators
 from ... import types as sqltypes
 
 try:
     from uuid import UUID as _python_UUID
 except ImportError:
     _python_UUID = None
-
 
 
 class Any(expression.ColumnElement):
@@ -110,7 +109,9 @@ class array(expression.Tuple):
 
 
 CONTAINS = operators.custom_op("@>", precedence=5)
+
 CONTAINED_BY = operators.custom_op("<@", precedence=5)
+
 OVERLAP = operators.custom_op("&&", precedence=5)
 
 
@@ -215,13 +216,6 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
         """Define comparison operations for :class:`.ARRAY`."""
 
-        def _type_for_index(self, index):
-            new_type = super(ARRAY.Comparator, self)._type_for_index(index)
-            if self.type.dimensions is not None:
-                new_type.dimensions = self.dimensions - 1
-
-            return new_type
-
         def any(self, other, operator=operators.eq):
             """Return ``other operator ANY (array)`` clause.
 
@@ -303,6 +297,12 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     comparator_factory = Comparator
 
+    def _type_for_index(self, index):
+        adapt_kw = {}
+        if self.dimensions is not None:
+            adapt_kw['dimensions'] = self.dimensions - 1
+        return super(ARRAY, self)._type_for_index(index, adapt_kw)
+
     def __init__(self, item_type, as_tuple=False, dimensions=None,
                  zero_indexes=False, index_map=None):
         """Construct an ARRAY.
@@ -374,7 +374,7 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
             self.index_map = d = {
                 ARRAY.SLICE_TYPE: ARRAY.SAME_TYPE
             }
-            for i in range(self.dimensions):
+            for i in range(self.dimensions - 1):
                 d[ARRAY.ANY_KEY] = d = {}
             d[ARRAY.ANY_KEY] = self.item_type
         else:
@@ -416,8 +416,7 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
             )
 
     def bind_processor(self, dialect):
-        item_proc = self.item_type.\
-            dialect_impl(dialect).\
+        item_proc = self.item_type.dialect_impl(dialect).\
             bind_processor(dialect)
 
         def process(value):
@@ -432,8 +431,7 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
         return process
 
     def result_processor(self, dialect, coltype):
-        item_proc = self.item_type.\
-            dialect_impl(dialect).\
+        item_proc = self.item_type.dialect_impl(dialect).\
             result_processor(dialect, coltype)
 
         def process(value):

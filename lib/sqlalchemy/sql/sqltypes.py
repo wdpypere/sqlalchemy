@@ -203,37 +203,37 @@ class Indexable(object):
         ANY_KEY: SAME_TYPE
     })
 
+    def _type_for_index(self, index, adapt_kw=util.immutabledict()):
+        """Given a getitem index, look in the index_map to see if
+        a known type is set up for this value.
+
+        May return a new type which would contain a fragment of
+        the index map at that point.
+
+        """
+        map_ = self.index_map
+        if isinstance(index, slice):
+            index = Indexable.SLICE_TYPE
+
+        if index in map_:
+            new_type = map_[index]
+        else:
+            try:
+                new_type = map_[Indexable.ANY_KEY]
+            except KeyError:
+                raise exc.InvalidRequestError(
+                    "Key not handled by type declaration: %s" % index)
+        if isinstance(new_type, collections.Mapping):
+            return self.adapt(self.__class__, index_map=new_type, **adapt_kw)
+        elif new_type is Indexable.SAME_TYPE:
+            return self
+        else:
+            return new_type
+
     class Comparator(TypeEngine.Comparator):
 
-        def _type_for_index(self, index):
-            """Given a getitem index, look in the index_map to see if
-            a known type is set up for this value.
-
-            May return a new type which would contain a fragment of
-            the index map at that point.
-
-            """
-            map_ = self.type.index_map
-            if isinstance(index, slice):
-                index = Indexable.SLICE_TYPE
-
-            if index in map_:
-                new_type = map_[index]
-            else:
-                try:
-                    new_type = map_[Indexable.ANY_KEY]
-                except KeyError:
-                    raise exc.InvalidRequestError(
-                        "Key not handled by type declaration: %s" % index)
-            if isinstance(new_type, collections.Mapping):
-                return self.type.adapt(self.type.__class__, index_map=new_type)
-            elif new_type is Indexable.SAME_TYPE:
-                return self.type
-            else:
-                return new_type
-
         def _setup_getitem(self, index):
-            return operators.getitem, index, self._type_for_index(index)
+            return operators.getitem, index, self.type._type_for_index(index)
 
         def __getitem__(self, index):
             operator, adjusted_right_expr, result_type = \
@@ -243,13 +243,6 @@ class Indexable(object):
                 adjusted_right_expr,
                 result_type=result_type
             )
-
-        def _adapt_expression(self, op, other_comparator):
-            if op is operators.getitem:
-                return op, self._type_for_index(other_comparator)
-            else:
-                return super(Indexable.Comparator, self)._adapt_expression(
-                    op, other_comparator)
 
     comparator_factory = Comparator
 

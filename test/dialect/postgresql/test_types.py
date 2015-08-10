@@ -7,7 +7,7 @@ from sqlalchemy import testing
 import datetime
 from sqlalchemy import Table, MetaData, Column, Integer, Enum, Float, select, \
     func, DateTime, Numeric, exc, String, cast, REAL, TypeDecorator, Unicode, \
-    Text, null, text
+    Text, null, text, column
 from sqlalchemy.sql import operators
 from sqlalchemy import types
 import sqlalchemy as sa
@@ -828,6 +828,43 @@ class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
                 ), True
         )
 
+    def test_array_index_map_generic(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        is_(
+            col[5].type._type_affinity, Integer
+        )
+
+    def test_array_index_map_unbounded(self):
+        col = column(
+            'x',
+            postgresql.ARRAY(
+                Integer, index_map={
+                    postgresql.ARRAY.ANY_KEY: postgresql.ARRAY.SAME_TYPE}))
+        is_(
+            col[5].type._type_affinity, postgresql.ARRAY
+        )
+        is_(
+            col[5][6][7][8].type._type_affinity, postgresql.ARRAY
+        )
+
+    def test_array_index_map_dimensions(self):
+        col = column('x', postgresql.ARRAY(Integer, dimensions=3))
+        is_(
+            col[5].type._type_affinity, postgresql.ARRAY
+        )
+        eq_(
+            col[5].type.dimensions, 2
+        )
+        is_(
+            col[5][6].type._type_affinity, postgresql.ARRAY
+        )
+        eq_(
+            col[5][6].type.dimensions, 1
+        )
+        is_(
+            col[5][6][7].type._type_affinity, Integer
+        )
+
     def test_array_getitem_single_type(self):
         arrtable = self.tables.arrtable
         is_(arrtable.c.intarr[1].type._type_affinity, Integer)
@@ -1371,6 +1408,19 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
             proc('"key2"=>"value2", "key1"=>"value1"'),
             {"key1": "value1", "key2": "value2"}
         )
+
+    def test_ret_type_text(self):
+        col = column('x', HSTORE())
+
+        is_(col['foo'].type.__class__, Text)
+
+    def test_ret_type_custom(self):
+        class MyType(types.UserDefinedType):
+            pass
+
+        col = column('x', HSTORE(index_map={HSTORE.ANY_KEY: MyType}))
+
+        is_(col['foo'].type.__class__, MyType)
 
     def test_where_has_key(self):
         self._test_where(
@@ -2093,16 +2143,62 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
             "(test_table.test_column #> %(test_column_1)s) IS NULL"
         )
 
+    def test_path_typing(self):
+        col = column('x', JSON(index_map={
+            'q': {'p': {'r': Integer, JSON.ANY_KEY: String}}
+        }))
+        is_(
+            col['q'].type._type_affinity, JSON
+        )
+        is_(
+            col[('q', )].type._type_affinity, JSON
+        )
+        is_(
+            col['q']['p'].type._type_affinity, JSON
+        )
+        is_(
+            col[('q', 'p')].type._type_affinity, JSON
+        )
+        is_(
+            col['q']['p']['r'].type._type_affinity, Integer
+        )
+        is_(
+            col[('q', 'p', 'r')].type._type_affinity, Integer
+        )
+        is_(
+            col['q']['p']['j'].type._type_affinity, String
+        )
+        is_(
+            col[('q', 'p', 'j')].type._type_affinity, String
+        )
+
+    def test_path_typing_unknown_key(self):
+        col = column('x', JSON(index_map={
+            'q': Integer
+        }))
+        assert_raises_message(
+            sa.exc.InvalidRequestError,
+            "Key not handled by type declaration: j",
+            operators.getitem, col, 'j'
+        )
+
     def test_where_getitem_as_text(self):
         self._test_where(
             self.jsoncol['bar'].astext == None,
             "(test_table.test_column ->> %(test_column_1)s) IS NULL"
         )
 
-    def test_where_getitem_as_cast(self):
+    def test_where_getitem_astext_cast(self):
+        self._test_where(
+            self.jsoncol['bar'].astext.cast(Integer) == 5,
+            "CAST(test_table.test_column ->> %(test_column_1)s AS INTEGER) "
+            "= %(param_1)s"
+        )
+
+    def test_where_getitem_json_cast(self):
         self._test_where(
             self.jsoncol['bar'].cast(Integer) == 5,
-            "CAST(test_table.test_column ->> %(test_column_1)s AS INTEGER) "
+            "CAST(test_table.test_column -> %(test_column_1)s AS INTEGER) "
             "= %(param_1)s"
         )
 
@@ -2144,6 +2240,7 @@ class JSONRoundTripTest(fixtures.TablesTest):
             {'name': 'r3', 'data': {"k1": "r3v1", "k2": "r3v2"}},
             {'name': 'r4', 'data': {"k1": "r4v1", "k2": "r4v2"}},
             {'name': 'r5', 'data': {"k1": "r5v1", "k2": "r5v2", "k3": 5}},
+            {'name': 'r6', 'data': {"k1": {"r6v1": {'subr': [1, 2, 3]}}}},
         )
 
     def _assert_data(self, compare, column='data'):
@@ -2309,12 +2406,25 @@ class JSONRoundTripTest(fixtures.TablesTest):
         engine = testing.db
         self._fixture_data(engine)
         data_table = self.tables.data_table
+
         result = engine.execute(
-            select([data_table.c.data]).where(
-                data_table.c.data[('k1',)].astext == 'r3v1'
+            select([data_table.c.name]).where(
+                data_table.c.data[('k1', 'r6v1', 'subr')].astext == "[1, 2, 3]"
             )
-        ).first()
-        eq_(result, ({'k1': 'r3v1', 'k2': 'r3v2'},))
+        )
+        eq_(result.scalar(), 'r6')
+
+    def test_multi_index_query(self):
+        engine = testing.db
+        self._fixture_data(engine)
+        data_table = self.tables.data_table
+
+        result = engine.execute(
+            select([data_table.c.name]).where(
+                data_table.c.data['k1']['r6v1']['subr'].astext == "[1, 2, 3]"
+            )
+        )
+        eq_(result.scalar(), 'r6')
 
     def test_query_returned_as_text(self):
         engine = testing.db
@@ -2330,7 +2440,7 @@ class JSONRoundTripTest(fixtures.TablesTest):
         self._fixture_data(engine)
         data_table = self.tables.data_table
         result = engine.execute(
-            select([data_table.c.data['k3'].cast(Integer)]).where(
+            select([data_table.c.data['k3'].astext.cast(Integer)]).where(
                 data_table.c.name == 'r5')
         ).first()
         assert isinstance(result[0], int)
