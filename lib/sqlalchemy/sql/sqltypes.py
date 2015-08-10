@@ -68,7 +68,8 @@ class Concatenable(object):
                     )):
                 return operators.concat_op, self.expr.type
             else:
-                return op, self.expr.type
+                return super(Concatenable.Comparator)._adapt_expression(
+                    op, other_comparator)
 
     comparator_factory = Comparator
 
@@ -82,6 +83,20 @@ class Indexable(object):
     zero_indexes = False
     """if True, Python zero-based indexes should be interpreted as one-based
     on the SQL expression side."""
+
+    class Comparator(TypeEngine.Comparator):
+
+        def _index_map_type(self, right_comparator):
+            raise NotImplementedError()
+
+        def _adapt_expression(self, op, other_comparator):
+            if op is operators.getitem:
+                return op, self._index_map_type(other_comparator)
+            else:
+                return super(Indexable.Comparator)._adapt_expression(
+                    op, other_comparator)
+
+    comparator_factory = Comparator
 
 
 class String(Concatenable, TypeEngine):

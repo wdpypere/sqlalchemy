@@ -6,113 +6,40 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 from __future__ import absolute_import
 
+import collections
 import json
 
 from .base import ischema_names
 from ... import types as sqltypes
-from ...sql.operators import custom_op
-from ... import sql
-from ...sql import elements, default_comparator
+from ...sql import operators
+from ...sql import elements
 from ... import util
 
-__all__ = ('JSON', 'JSONElement', 'JSONB')
+__all__ = ('JSON', 'JSONB')
 
 
-class JSONElement(elements.IndexExpression):
-    """Represents accessing an element of a :class:`.JSON` value.
+# json : returns json
+INDEX = operators.custom_op(
+    "->", precedence=5, natural_self_precedent=True
+)
 
-    The :class:`.JSONElement` is produced whenever using the Python index
-    operator on an expression that has the type :class:`.JSON`::
+# path operator: returns json
+PATHIDX = operators.custom_op(
+    "#>", precedence=5, natural_self_precedent=True
+)
 
-        expr = mytable.c.json_data['some_key']
+# json + astext: returns text
+ASTEXT = operators.custom_op(
+    "->>", precedence=5, natural_self_precedent=True
+)
 
-    The expression typically compiles to a JSON access such as ``col -> key``.
-    Modifiers are then available for typing behavior, including
-    :meth:`.JSONElement.cast` and :attr:`.JSONElement.astext`.
-
-    """
-
-    INDEX = custom_op(
-        "->", precedence=5, natural_self_precedent=True
-    )
-    ARRAYIDX = custom_op(
-        "#>", precedence=5, natural_self_precedent=True
-    )
-    ASTEXT = custom_op(
-        "->>", precedence=5, natural_self_precedent=True
-    )
-    ASTEXT_ARRAYIDX = custom_op(
-        "#>>", precedence=5, natural_self_precedent=True
-    )
-
-    _ASTEXT_OPS = set([ASTEXT, ASTEXT_ARRAYIDX])
-    _ARRIDX_OPS = set([ARRAYIDX, ASTEXT_ARRAYIDX])
-
-    def __init__(self, left, right, operator, result_type=None):
-        if hasattr(right, '__iter__') and \
-                not isinstance(right, util.string_types):
-            right = "{%s}" % (
-                ", ".join(util.text_type(elem) for elem in right))
-
-            if operator is self.INDEX:
-                operator = self.ARRAYIDX
-            elif operator is self.ASTEXT:
-                operator = self.ASTEXT_ARRAYIDX
-
-        self._json_opstring = operator.opstring
-        self._astext = operator in self._ASTEXT_OPS
-        self._isarrayidx = operator in self._ARRIDX_OPS
-
-        right = default_comparator._check_literal(
-            left, operator, right)
-        super(JSONElement, self).__init__(
-            left, right, operator, type_=result_type)
-
-    @property
-    def astext(self):
-        """Convert this :class:`.JSONElement` to use the 'astext' operator
-        when evaluated.
-
-        E.g.::
-
-            select([data_table.c.data['some key'].astext])
-
-        .. seealso::
-
-            :meth:`.JSONElement.cast`
-
-        """
-        if self._astext:
-            return self
-        else:
-            return JSONElement(
-                self.left,
-                self.right,
-                self.ASTEXT_ARRAYIDX if self.operator is self.ARRAYIDX
-                else self.ASTEXT,
-                result_type=sqltypes.String(convert_unicode=True)
-            )
-
-    def cast(self, type_):
-        """Convert this :class:`.JSONElement` to apply both the 'astext' operator
-        as well as an explicit type cast when evaluated.
-
-        E.g.::
-
-            select([data_table.c.data['some key'].cast(Integer)])
-
-        .. seealso::
-
-            :attr:`.JSONElement.astext`
-
-        """
-        if not self._astext:
-            return self.astext.cast(type_)
-        else:
-            return sql.cast(self, type_)
+# path operator  + astext: returns text
+ASTEXT_PATHIDX = operators.custom_op(
+    "#>>", precedence=5, natural_self_precedent=True
+)
 
 
-class JSON(sqltypes.TypeEngine):
+class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
     """Represent the Postgresql JSON type.
 
     The :class:`.JSON` type stores arbitrary JSON format data, e.g.::
@@ -201,22 +128,67 @@ class JSON(sqltypes.TypeEngine):
          """
         self.none_as_null = none_as_null
 
-    class comparator_factory(sqltypes.Concatenable.Comparator):
+    class Comparator(sqltypes.Concatenable.Comparator):
         """Define comparison operations for :class:`.JSON`."""
 
-        def __getitem__(self, other):
-            """Get the value at a given key."""
+        def __init__(self, expr, astext=False, aspath=False):
+            super(JSON.comparator_factory, self).__init__(expr)
+            self._astext = astext
+            self._aspath = aspath
 
-            return JSONElement(
-                self.expr, other, JSONElement.INDEX,
-                result_type=self.expr.type)
+        def _clone(self, astext=False, aspath=False):
+            return self.__class__(
+                self.expr,
+                astext=self._astext or astext,
+                aspath=self._aspath or aspath)
+
+        @property
+        def astext(self):
+            """On an indexed expression, use the "astext" (e.g. "->>")
+            conversion when rendered in SQL.
+
+            E.g.::
+
+                select([data_table.c.data['some key'].astext])
+
+            .. seealso::
+
+                :meth:`.ColumnElement.cast`
+
+            """
+            if self._astext:
+                return self
+            else:
+                return self._clone(astext=True)
+
+        def __getitem__(self, index):
+            if isinstance(index, collections.Sequence):
+                index = "{%s}" % (
+                    ", ".join(util.text_type(elem) for elem in index))
+                aspath = True
+            else:
+                aspath = False
+            return self.operate(operators.getitem, index, aspath=aspath)
 
         def _adapt_expression(self, op, other_comparator):
-            if isinstance(op, custom_op):
-                if op.opstring == '->':
-                    return op, sqltypes.Text
-            return sqltypes.Concatenable.Comparator.\
-                _adapt_expression(self, op, other_comparator)
+            if op is operators.getitem:
+                if self._astext:
+                    if self._aspath:
+                        return ASTEXT_PATHIDX, sqltypes.Text
+                    else:
+                        return ASTEXT, sqltypes.Text
+                else:
+                    if self._aspath:
+                        # TODO: consult index map
+                        return PATHIDX, self.type
+                    else:
+                        # TODO: consult index map
+                        return INDEX, self.type
+            else:
+                return super(JSON.comparator_factory, self)._adapt_expression(
+                    op, other_comparator)
+
+    comparator_factory = Comparator
 
     def bind_processor(self, dialect):
         json_serializer = dialect._json_serializer or json.dumps

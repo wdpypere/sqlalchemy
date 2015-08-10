@@ -109,6 +109,11 @@ class array(expression.Tuple):
         return self
 
 
+CONTAINS = operators.custom_op("@>", precedence=5)
+CONTAINED_BY = operators.custom_op("<@", precedence=5)
+OVERLAP = operators.custom_op("&&", precedence=5)
+
+
 class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     """Postgresql ARRAY type.
@@ -195,7 +200,8 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
     """
     __visit_name__ = 'ARRAY'
 
-    class Comparator(sqltypes.Concatenable.Comparator):
+    class Comparator(
+            sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
 
         """Define comparison operations for :class:`.ARRAY`."""
 
@@ -263,26 +269,29 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
             """Boolean expression.  Test if elements are a superset of the
             elements of the argument array expression.
             """
-            return self.expr.op('@>')(other)
+            return self.operate(CONTAINS, other)
 
         def contained_by(self, other):
             """Boolean expression.  Test if elements are a proper subset of the
             elements of the argument array expression.
             """
-            return self.expr.op('<@')(other)
+            return self.operate(CONTAINED_BY, other)
 
         def overlap(self, other):
             """Boolean expression.  Test if array has elements in common with
             an argument array expression.
             """
-            return self.expr.op('&&')(other)
+            return self.operate(OVERLAP, other)
+
+        def _index_map_type(self, right_comparator):
+            return self.type
 
         def _adapt_expression(self, op, other_comparator):
-            if isinstance(op, operators.custom_op):
-                if op.opstring in ['@>', '<@', '&&']:
-                    return op, sqltypes.Boolean
-            return sqltypes.Concatenable.Comparator.\
-                _adapt_expression(self, op, other_comparator)
+            if op in (CONTAINS, CONTAINED_BY, OVERLAP):
+                return op, sqltypes.Boolean
+            else:
+                return super(ARRAY.Comparator, self).\
+                    _adapt_expression(op, other_comparator)
 
     comparator_factory = Comparator
 

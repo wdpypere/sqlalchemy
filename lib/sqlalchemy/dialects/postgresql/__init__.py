@@ -16,7 +16,7 @@ from .base import \
     CreateEnumType
 from .constraints import ExcludeConstraint
 from .hstore import HSTORE, hstore
-from .json import JSON, JSONElement, JSONB
+from .json import JSON, JSONB
 from .array import array, ARRAY, Any, All
 
 from .ranges import INT4RANGE, INT8RANGE, NUMRANGE, DATERANGE, TSRANGE, \
@@ -28,6 +28,6 @@ __all__ = (
     'DOUBLE_PRECISION', 'TIMESTAMP', 'TIME', 'DATE', 'BYTEA', 'BOOLEAN',
     'INTERVAL', 'ARRAY', 'ENUM', 'dialect', 'Any', 'All', 'array', 'HSTORE',
     'hstore', 'INT4RANGE', 'INT8RANGE', 'NUMRANGE', 'DATERANGE',
-    'TSRANGE', 'TSTZRANGE', 'json', 'JSON', 'JSONB', 'JSONElement',
-    'DropEnumType', 'CreateEnumType'
+    'TSRANGE', 'TSTZRANGE', 'json', 'JSON', 'JSONB',
+    'DropEnumType', 'CreateEnumType', 'ExcludeConstraint'
 )
