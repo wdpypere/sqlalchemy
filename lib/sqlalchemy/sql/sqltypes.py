@@ -79,87 +79,6 @@ class Indexable(object):
     """A mixin that marks a type as supporting indexing operations,
     such as array or JSON structures.
 
-    The key feature provided by :class:`.Indexable` is the index map feature.
-    This allows SQL expressions that use the index operator to have
-    an expected return type based on the structure.   For example, if
-    a JSON type expects to return json structures with the keys "a" and "b",
-    and the value referred to by "a" is an integer, and the value referred
-    to by "b" is itself a JSON structure with keys "c" and "d" referring
-    to String values, an index map for this schema would look like the
-    following::
-
-        # assume JSON is an Indexable subclass
-
-        type = JSON(index_map={
-                "a": Integer,
-                "b": {
-                    "c": String,
-                    "d": String
-                }
-            }
-        )
-
-    An expression that uses this type would indicate the following return
-    types::
-
-        column('x', type)['a']  # returns Integer
-        column('x', type)['b']  # returns JSON(index_map={"c": String, "d": String})
-        column('x', type)['b']['c']  # returns String
-        column('x', type)['unknown'] # raises an error
-
-    To indicate any key returned, the symbol :attr:`.Indexable.ANY_KEY` may
-    be used::
-
-        type = JSON(index_map={
-                JSON.ANY_KEY: {
-                    "x": Integer,
-                    "y": Integer
-                }
-            }
-        )
-
-    The above structure would be appropriate for a list of two-element mappings,
-    where any value in the first position, including SQL expressions, returns
-    the structure::
-
-        column('x', type)[5]['x']  # returns Integer
-        column('x', type)[column('y')]['x']  # returns Integer
-
-    To indicate a recursive structure, e.g. where a match should just
-    return the current type, use the symbol :attr:`.Indexable.SAME_TYPE`::
-
-        type = JSON(index_map={
-                JSON.ANY_KEY: JSON.SAME_TYPE
-            }
-        )
-
-    The above structure would cause all index expressions to keep returning
-    the same JSON structure repeatedly.   Types like the built in PostgreSQL
-    :class:`.postgresql.JSON` type use the above map by default.
-
-    For an array-like structure, the index_map would typically refer
-    to the number of dimensions known to be in the array.  E.g. if we
-    have a two-dimensional array of integers, the index_map assuming an
-    :class:`.Indexable` subclass ARRAY would be::
-
-        type = ARRAY(index_map={
-                ARRAY.ANY_KEY: {
-                    ARRAY.ANY_KEY: Integer
-                }
-            }
-        )
-
-    Above, a single-index operation returns another array::
-
-        column('x', type)[5]  # returns ARRAY of Integer
-
-    whereas calling upon two dimensions returns Integer::
-
-        column('x', type)[5][7]  # returns Integer
-
-    The above ARRAY structure is used by the built-in PostgreSQL
-    :class:`.postgresql.ARRAY` type, when configured with a specific
-    number of dimensions.
 
     .. versionadded:: 1.1.0
 
@@ -170,70 +89,10 @@ class Indexable(object):
     """if True, Python zero-based indexes should be interpreted as one-based
     on the SQL expression side."""
 
-    ANY_KEY = util.symbol('ANY_KEY')
-    """Symbol indicating a match for any index or key in an index_map structure.
-
-    .. seealso::
-
-        :class:`.Indexable`
-
-    """
-
-    SLICE_TYPE = util.symbol('SLICE_TYPE')
-    """Symbol indicating a match for an index sent as a slice in
-    an index_map structure.
-
-    .. seealso::
-
-        :class:`.Indexable`
-
-    """
-
-    SAME_TYPE = util.symbol('SAME_TYPE')
-    """Symbol indicating that this same type should be returned upon
-    a match in an index_map structure.
-
-    .. seealso::
-
-        :class:`.Indexable`
-
-    """
-
-    index_map = util.immutabledict({
-        ANY_KEY: SAME_TYPE
-    })
-
-    def _type_for_index(self, index, adapt_kw=util.immutabledict()):
-        """Given a getitem index, look in the index_map to see if
-        a known type is set up for this value.
-
-        May return a new type which would contain a fragment of
-        the index map at that point.
-
-        """
-        map_ = self.index_map
-        if isinstance(index, slice):
-            index = Indexable.SLICE_TYPE
-
-        if index in map_:
-            new_type = map_[index]
-        else:
-            try:
-                new_type = map_[Indexable.ANY_KEY]
-            except KeyError:
-                raise exc.InvalidRequestError(
-                    "Key not handled by type declaration: %s" % index)
-        if isinstance(new_type, collections.Mapping):
-            return self.adapt(self.__class__, index_map=new_type, **adapt_kw)
-        elif new_type is Indexable.SAME_TYPE:
-            return self
-        else:
-            return new_type
-
     class Comparator(TypeEngine.Comparator):
 
         def _setup_getitem(self, index):
-            return operators.getitem, index, self.type._type_for_index(index)
+            raise NotImplementedError()
 
         def __getitem__(self, index):
             operator, adjusted_right_expr, result_type = \

@@ -106,10 +106,7 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
     Index operations return an expression object whose type defaults to
     :class:`.JSON` by default, so that further JSON-oriented instructions
-    may be called upon the result type.   The return type of index operations
-    can be customized on a per-key basis using the :paramref:`.JSON.index_map`
-    parameter; see :class:`.Indexable` for background on how to set up
-    index maps.
+    may be called upon the result type.
 
     The :class:`.JSON` type, when used with the SQLAlchemy ORM, does not
     detect in-place mutations to the structure.  In order to detect these, the
@@ -142,8 +139,9 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
     __visit_name__ = 'JSON'
 
     hashable = False
+    astext_type = sqltypes.Text()
 
-    def __init__(self, none_as_null=False, index_map=None):
+    def __init__(self, none_as_null=False, astext_type=None):
         """Construct a :class:`.JSON` type.
 
         :param none_as_null: if True, persist the value ``None`` as a
@@ -157,18 +155,16 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
          .. versionchanged:: 0.9.8 - Added ``none_as_null``, and :func:`.null`
             is now supported in order to persist a NULL value.
 
-        :param index_map: type map used by the getitem operator, e.g.
-         expressions like ``col[5]``.  See :class:`.Indexable` for a
-         description of how this map is configured.   The index_map
-         for the :class:`.JSON` and :class:`.JSONB` types defaults to
-         ``{ANY_KEY: SAME_TYPE}``.
+        :param astext_type: the type to use for the
+         :attr:`.JSON.Comparator.astext`
+         accessor on indexed attributes.  Defaults to :class:`.types.Text`.
 
-         .. versionadded: 1.1
+         .. versionadded:: 1.1.0
 
          """
         self.none_as_null = none_as_null
-        if index_map is not None:
-            self.index_map = index_map
+        if astext_type is not None:
+            self.astext_type = astext_type
 
     class Comparator(
             sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
@@ -195,24 +191,18 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
                 against = ASTEXT
 
             return self.expr.left.operate(
-                against, self.expr.right, result_type=sqltypes.Text)
+                against, self.expr.right, result_type=self.type.astext_type)
 
         def _setup_getitem(self, index):
             if not isinstance(index, util.string_types):
                 assert isinstance(index, collections.Sequence)
                 tokens = [util.text_type(elem) for elem in index]
                 index = "{%s}" % (", ".join(tokens))
-
-                ret_type = self.type
-                for tok in tokens:
-                    ret_type = ret_type._type_for_index(tok)
-
                 operator = PATHIDX
             else:
                 operator = INDEX
-                ret_type = self.type._type_for_index(index)
 
-            return operator, index, ret_type
+            return operator, index, self.type
 
     comparator_factory = Comparator
 

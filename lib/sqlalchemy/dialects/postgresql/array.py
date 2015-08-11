@@ -171,8 +171,7 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
         })
 
     Multi-dimensional array index support is provided automatically based on
-    either the value specified for the :paramref:`.ARRAY.dimensions` parameter,
-    or more specifically the :paramref:`.ARRAY.index_map` parameter.
+    either the value specified for the :paramref:`.ARRAY.dimensions` parameter.
     E.g. an :class:`.ARRAY` with dimensions set to 2 would return an expression
     of type :class:`.ARRAY` for a single index operation::
 
@@ -215,6 +214,17 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
             sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
 
         """Define comparison operations for :class:`.ARRAY`."""
+
+        def _setup_getitem(self, index):
+            if isinstance(index, slice):
+                return_type = self.type
+            elif self.type.dimensions is None or self.type.dimensions == 1:
+                return_type = self.type.item_type
+            else:
+                adapt_kw = {'dimensions': self.type.dimensions - 1}
+                return_type = self.type.adapt(self.type.__class__, **adapt_kw)
+
+            return operators.getitem, index, return_type
 
         def any(self, other, operator=operators.eq):
             """Return ``other operator ANY (array)`` clause.
@@ -297,14 +307,8 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     comparator_factory = Comparator
 
-    def _type_for_index(self, index):
-        adapt_kw = {}
-        if self.dimensions is not None:
-            adapt_kw['dimensions'] = self.dimensions - 1
-        return super(ARRAY, self)._type_for_index(index, adapt_kw)
-
     def __init__(self, item_type, as_tuple=False, dimensions=None,
-                 zero_indexes=False, index_map=None):
+                 zero_indexes=False):
         """Construct an ARRAY.
 
         E.g.::
@@ -338,25 +342,6 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
          .. versionadded:: 0.9.5
 
-        :param index_map: type map used by the getitem operator, e.g.
-         expressions like ``col[5]``.  See :class:`.Indexable` for a
-         description of how this map is configured.
-
-         For the :class:`.ARRAY` class, this map if omitted is
-         automatically configured based on the  number of dimensions
-         given, that is an :class:`.ARRAY` that specifies
-         ``dimensions=3`` and a return type of ``String`` would
-         generate an  index_map of  ``{ANY_KEY: {ANY_KEY: {ANY_KEY:
-         String}}}``, so that an expression of ``col[x][y][z]`` would
-         yield arrays until the last index, which  yields a string
-         expression.
-
-         When the map and the dimensions argument is omitted, the map here
-         assumes a 1-dimensional array and defaults to
-         ``{ANY_KEY: <array type}``.
-
-         ..versionadded:: 1.1
-
 
         """
         if isinstance(item_type, ARRAY):
@@ -368,20 +353,6 @@ class ARRAY(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
         self.as_tuple = as_tuple
         self.dimensions = dimensions
         self.zero_indexes = zero_indexes
-        if index_map is not None:
-            self.index_map = index_map
-        elif self.dimensions is not None:
-            self.index_map = d = {
-                ARRAY.SLICE_TYPE: ARRAY.SAME_TYPE
-            }
-            for i in range(self.dimensions - 1):
-                d[ARRAY.ANY_KEY] = d = {}
-            d[ARRAY.ANY_KEY] = self.item_type
-        else:
-            self.index_map = {
-                ARRAY.ANY_KEY: self.item_type,
-                ARRAY.SLICE_TYPE: ARRAY.SAME_TYPE
-            }
 
     @property
     def hashable(self):

@@ -118,23 +118,19 @@ class HSTORE(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     __visit_name__ = 'HSTORE'
     hashable = False
+    index_type = sqltypes.Text()
 
-    index_map = {sqltypes.Indexable.ANY_KEY: sqltypes.Text()}
+    def __init__(self, index_type=None):
+        """Construct a new :class:`.HSTORE`.
 
-    def __init__(self, none_as_null=False, index_map=None):
-        """Construct an :class:`.HSTORE` type.
+        :param index_type: the type that should be used for indexed values.
+         Defaults to :class:`.types.Text`.
 
-        :param index_map: type map used by the getitem operator, e.g.
-         expressions like ``col['somekey']``.  See :class:`.Indexable` for a
-         description of how this map is configured.   For :class:`.HSTORE`,
-         the index_map defaults to ``{ANY_KEY: Text}``, as all hstore
-         elements in Postgresql are of type text.
+         .. versionadded:: 1.1.0
 
-         .. versionadded: 1.1
-
-         """
-        if index_map is not None:
-            self.index_map = index_map
+        """
+        if index_type is not None:
+            self.index_type = index_type
 
     class Comparator(
             sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
@@ -170,7 +166,7 @@ class HSTORE(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
                 CONTAINED_BY, other, result_type=sqltypes.Boolean)
 
         def _setup_getitem(self, index):
-            return INDEX, index, self.type._type_for_index(index)
+            return INDEX, index, self.type.index_type
 
         def defined(self, key):
             """Boolean expression.  Test for presence of a non-NULL value for

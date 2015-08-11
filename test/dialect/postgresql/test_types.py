@@ -828,25 +828,6 @@ class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
                 ), True
         )
 
-    def test_array_index_map_generic(self):
-        col = column('x', postgresql.ARRAY(Integer))
-        is_(
-            col[5].type._type_affinity, Integer
-        )
-
-    def test_array_index_map_unbounded(self):
-        col = column(
-            'x',
-            postgresql.ARRAY(
-                Integer, index_map={
-                    postgresql.ARRAY.ANY_KEY: postgresql.ARRAY.SAME_TYPE}))
-        is_(
-            col[5].type._type_affinity, postgresql.ARRAY
-        )
-        is_(
-            col[5][6][7][8].type._type_affinity, postgresql.ARRAY
-        )
-
     def test_array_index_map_dimensions(self):
         col = column('x', postgresql.ARRAY(Integer, dimensions=3))
         is_(
@@ -1418,7 +1399,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
         class MyType(types.UserDefinedType):
             pass
 
-        col = column('x', HSTORE(index_map={HSTORE.ANY_KEY: MyType}))
+        col = column('x', HSTORE(index_type=MyType))
 
         is_(col['foo'].type.__class__, MyType)
 
@@ -2144,9 +2125,7 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
         )
 
     def test_path_typing(self):
-        col = column('x', JSON(index_map={
-            'q': {'p': {'r': Integer, JSON.ANY_KEY: String}}
-        }))
+        col = column('x', JSON())
         is_(
             col['q'].type._type_affinity, JSON
         )
@@ -2159,27 +2138,23 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
         is_(
             col[('q', 'p')].type._type_affinity, JSON
         )
+
+    def test_custom_astext_type(self):
+        class MyType(types.UserDefinedType):
+            pass
+
+        col = column('x', JSON(astext_type=MyType))
+
         is_(
-            col['q']['p']['r'].type._type_affinity, Integer
-        )
-        is_(
-            col[('q', 'p', 'r')].type._type_affinity, Integer
-        )
-        is_(
-            col['q']['p']['j'].type._type_affinity, String
-        )
-        is_(
-            col[('q', 'p', 'j')].type._type_affinity, String
+            col['q'].astext.type.__class__, MyType
         )
 
-    def test_path_typing_unknown_key(self):
-        col = column('x', JSON(index_map={
-            'q': Integer
-        }))
-        assert_raises_message(
-            sa.exc.InvalidRequestError,
-            "Key not handled by type declaration: j",
-            operators.getitem, col, 'j'
+        is_(
+            col[('q', 'p')].astext.type.__class__, MyType
+        )
+
+        is_(
+            col['q']['p'].astext.type.__class__, MyType
         )
 
     def test_where_getitem_as_text(self):
