@@ -20,6 +20,8 @@ from sqlalchemy import util
 from sqlalchemy.testing.util import round_decimal
 from sqlalchemy import inspect
 from sqlalchemy import event
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session
 
 tztable = notztable = metadata = table = None
 
@@ -944,6 +946,14 @@ class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
             lambda elem: (
                 x for x in elem))
 
+    def test_multi_dim_roundtrip(self):
+        arrtable = self.tables.arrtable
+        testing.db.execute(arrtable.insert(), dimarr=[[1, 2, 3], [4, 5, 6]])
+        eq_(
+            testing.db.scalar(select([arrtable.c.dimarr])),
+            [[-1, 0, 1], [2, 3, 4]]
+        )
+
     def test_array_contained_by_exec(self):
         arrtable = self.tables.arrtable
         with testing.db.connect() as conn:
@@ -1048,12 +1058,70 @@ class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
             set([('1', '2', '3'), ('4', '5', '6'), (('4', '5'), ('6', '7'))])
         )
 
-    def test_dimension(self):
-        arrtable = self.tables.arrtable
-        testing.db.execute(arrtable.insert(), dimarr=[[1, 2, 3], [4, 5, 6]])
+
+class HashableFlagORMTest(fixtures.TestBase):
+    """test the various 'collection' types that they flip the 'hashable' flag
+    appropriately.  [ticket:3499]"""
+
+    def _test(self, type_, data):
+        Base = declarative_base(metadata=self.metadata)
+
+        class A(Base):
+            __tablename__ = 'a1'
+            id = Column(Integer, primary_key=True)
+            data = Column(type_)
+        Base.metadata.create_all(testing.db)
+        s = Session(testing.db)
+        s.add_all([
+            A(data=elem) for elem in data
+        ])
+        s.commit()
+
         eq_(
-            testing.db.scalar(select([arrtable.c.dimarr])),
-            [[-1, 0, 1], [2, 3, 4]]
+            [(obj.A.id, obj.data) for obj in
+             s.query(A, A.data).order_by(A.id)],
+            list(enumerate(data, 1))
+        )
+
+    @testing.provide_metadata
+    def test_array(self):
+        self._test(
+            postgresql.ARRAY(Text()),
+            [['a', 'b', 'c'], ['d', 'e', 'f']]
+        )
+
+    @testing.requires.hstore
+    @testing.provide_metadata
+    def test_hstore(self):
+        self._test(
+            postgresql.HSTORE(),
+            [
+                {'a': '1', 'b': '2', 'c': '3'},
+                {'d': '4', 'e': '5', 'f': '6'}
+            ]
+        )
+
+    @testing.provide_metadata
+    def test_json(self):
+        self._test(
+            postgresql.JSON(),
+            [
+                {'a': '1', 'b': '2', 'c': '3'},
+                {'d': '4', 'e': {'e1': '5', 'e2': '6'},
+                 'f': {'f1': [9, 10, 11]}}
+            ]
+        )
+
+    @testing.requires.postgresql_jsonb
+    @testing.provide_metadata
+    def test_jsonb(self):
+        self._test(
+            postgresql.JSONB(),
+            [
+                {'a': '1', 'b': '2', 'c': '3'},
+                {'d': '4', 'e': {'e1': '5', 'e2': '6'},
+                 'f': {'f1': [9, 10, 11]}}
+            ]
         )
 
 
