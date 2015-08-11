@@ -700,7 +700,127 @@ class TimePrecisionTest(fixtures.TestBase, AssertsCompiledSQL):
         eq_(t2.c.c6.type.timezone, True)
 
 
-class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
+class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
+    __dialect__ = 'postgresql'
+
+    def test_array_int_index(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col[3]]),
+            "SELECT x[%(x_1)s] AS anon_1",
+            checkparams={'x_1': 3}
+        )
+
+    def test_array_any(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col.any(7, operator=operators.lt)]),
+            "SELECT %(param_1)s < ANY (x) AS anon_1",
+            checkparams={'param_1': 7}
+        )
+
+    def test_array_all(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col.all(7, operator=operators.lt)]),
+            "SELECT %(param_1)s < ALL (x) AS anon_1",
+            checkparams={'param_1': 7}
+        )
+
+    def test_array_contains(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col.contains(array([4, 5, 6]))]),
+            "SELECT x @> ARRAY[%(param_1)s, %(param_2)s, %(param_3)s] "
+            "AS anon_1",
+            checkparams={'param_1': 4, 'param_3': 6, 'param_2': 5}
+        )
+
+    def test_array_contained_by(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col.contained_by(array([4, 5, 6]))]),
+            "SELECT x <@ ARRAY[%(param_1)s, %(param_2)s, %(param_3)s] "
+            "AS anon_1",
+            checkparams={'param_1': 4, 'param_3': 6, 'param_2': 5}
+        )
+
+    def test_array_overlap(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col.overlap(array([4, 5, 6]))]),
+            "SELECT x && ARRAY[%(param_1)s, %(param_2)s, %(param_3)s] "
+            "AS anon_1",
+            checkparams={'param_1': 4, 'param_3': 6, 'param_2': 5}
+        )
+
+
+    def test_array_slice_index(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        self.assert_compile(
+            select([col[5:10]]),
+            "SELECT x[%(x_1)s:%(x_2)s] AS anon_1",
+            checkparams={'x_2': 10, 'x_1': 5}
+        )
+
+    def test_array_dim_index(self):
+        col = column('x', postgresql.ARRAY(Integer, dimensions=2))
+        self.assert_compile(
+            select([col[3][5]]),
+            "SELECT x[%(x_1)s][%(param_1)s] AS anon_1",
+            checkparams={'x_1': 3, 'param_1': 5}
+        )
+
+    def test_array_concat(self):
+        col = column('x', postgresql.ARRAY(Integer))
+        literal = array([4, 5])
+
+        self.assert_compile(
+            select([col + literal]),
+            "SELECT x || ARRAY[%(param_1)s, %(param_2)s] AS anon_1",
+            checkparams={'param_1': 4, 'param_2': 5}
+        )
+
+    def test_array_index_map_dimensions(self):
+        col = column('x', postgresql.ARRAY(Integer, dimensions=3))
+        is_(
+            col[5].type._type_affinity, postgresql.ARRAY
+        )
+        eq_(
+            col[5].type.dimensions, 2
+        )
+        is_(
+            col[5][6].type._type_affinity, postgresql.ARRAY
+        )
+        eq_(
+            col[5][6].type.dimensions, 1
+        )
+        is_(
+            col[5][6][7].type._type_affinity, Integer
+        )
+
+    def test_array_getitem_single_type(self):
+        m = MetaData()
+        arrtable = Table(
+            'arrtable', m,
+            Column('intarr', postgresql.ARRAY(Integer)),
+            Column('strarr', postgresql.ARRAY(String)),
+        )
+        is_(arrtable.c.intarr[1].type._type_affinity, Integer)
+        is_(arrtable.c.strarr[1].type._type_affinity, String)
+
+    def test_array_getitem_slice_type(self):
+        m = MetaData()
+        arrtable = Table(
+            'arrtable', m,
+            Column('intarr', postgresql.ARRAY(Integer)),
+            Column('strarr', postgresql.ARRAY(String)),
+        )
+        is_(arrtable.c.intarr[1:3].type._type_affinity, postgresql.ARRAY)
+        is_(arrtable.c.strarr[1:3].type._type_affinity, postgresql.ARRAY)
+
+
+class ArrayRoundTripTest(fixtures.TablesTest, AssertsExecutionResults):
 
     __only_on__ = 'postgresql'
     __backend__ = True
@@ -829,34 +949,6 @@ class ArrayTest(fixtures.TablesTest, AssertsExecutionResults):
                 ])
                 ), True
         )
-
-    def test_array_index_map_dimensions(self):
-        col = column('x', postgresql.ARRAY(Integer, dimensions=3))
-        is_(
-            col[5].type._type_affinity, postgresql.ARRAY
-        )
-        eq_(
-            col[5].type.dimensions, 2
-        )
-        is_(
-            col[5][6].type._type_affinity, postgresql.ARRAY
-        )
-        eq_(
-            col[5][6].type.dimensions, 1
-        )
-        is_(
-            col[5][6][7].type._type_affinity, Integer
-        )
-
-    def test_array_getitem_single_type(self):
-        arrtable = self.tables.arrtable
-        is_(arrtable.c.intarr[1].type._type_affinity, Integer)
-        is_(arrtable.c.strarr[1].type._type_affinity, String)
-
-    def test_array_getitem_slice_type(self):
-        arrtable = self.tables.arrtable
-        is_(arrtable.c.intarr[1:3].type._type_affinity, postgresql.ARRAY)
-        is_(arrtable.c.strarr[1:3].type._type_affinity, postgresql.ARRAY)
 
     def test_array_getitem_single_exec(self):
         arrtable = self.tables.arrtable

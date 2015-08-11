@@ -606,12 +606,53 @@ class IndexableTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         class MyType(Indexable, TypeEngine):
             __visit_name__ = 'mytype'
 
-            def __init__(self, zero_indexes=False):
+            def __init__(self, zero_indexes=False, dimensions=1):
                 if zero_indexes:
                     self.zero_indexes = zero_indexes
+                self.dimensions = dimensions
+
+            class Comparator(Indexable.Comparator):
+                def _setup_getitem(self, index):
+                    if isinstance(index, slice):
+                        return_type = self.type
+                    elif self.type.dimensions is None or \
+                            self.type.dimensions == 1:
+                        return_type = Integer()
+                    else:
+                        adapt_kw = {'dimensions': self.type.dimensions - 1}
+                        # this is also testing the behavior of adapt()
+                        # that we can pass kw that override constructor kws.
+                        # required a small change to util.constructor_copy().
+                        return_type = self.type.adapt(
+                            self.type.__class__, **adapt_kw)
+
+                    return operators.getitem, index, return_type
+            comparator_factory = Comparator
 
         self.MyType = MyType
         self.__dialect__ = MyDialect()
+
+    def test_setup_getitem_w_dims(self):
+        """test the behavior of the _setup_getitem() method given a simple
+        'dimensions' scheme - this is identical to postgresql.ARRAY."""
+
+        col = Column('x', self.MyType(dimensions=3))
+
+        is_(
+            col[5].type._type_affinity, self.MyType
+        )
+        eq_(
+            col[5].type.dimensions, 2
+        )
+        is_(
+            col[5][6].type._type_affinity, self.MyType
+        )
+        eq_(
+            col[5][6].type.dimensions, 1
+        )
+        is_(
+            col[5][6][7].type._type_affinity, Integer
+        )
 
     def test_getindex_literal(self):
 
