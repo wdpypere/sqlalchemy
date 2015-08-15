@@ -118,19 +118,19 @@ class HSTORE(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
 
     __visit_name__ = 'HSTORE'
     hashable = False
-    index_type = sqltypes.Text()
+    text_type = sqltypes.Text()
 
-    def __init__(self, index_type=None):
+    def __init__(self, text_type=None):
         """Construct a new :class:`.HSTORE`.
 
-        :param index_type: the type that should be used for indexed values.
+        :param text_type: the type that should be used for indexed values.
          Defaults to :class:`.types.Text`.
 
          .. versionadded:: 1.1.0
 
         """
-        if index_type is not None:
-            self.index_type = index_type
+        if text_type is not None:
+            self.text_type = text_type
 
     class Comparator(
             sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
@@ -166,7 +166,7 @@ class HSTORE(sqltypes.Indexable, sqltypes.Concatenable, sqltypes.TypeEngine):
                 CONTAINED_BY, other, result_type=sqltypes.Boolean)
 
         def _setup_getitem(self, index):
-            return INDEX, index, self.type.index_type
+            return INDEX, index, self.type.text_type
 
         def defined(self, key):
             """Boolean expression.  Test for presence of a non-NULL value for

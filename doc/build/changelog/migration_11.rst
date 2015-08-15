@@ -92,13 +92,9 @@ are noted as "unhashable", however this flag was not used consistently
 on built in types.  As described in :ref:`change_3499_postgresql`, this
 flag is now set consistently for all of Postgresql's "structural" types.
 
-
-The "unhashable" flag is also set on the :class:`.NullType` type.  This
-is key, as :class:`.NullType` is used to refer to any expression of unknown
-type.  In particular, the Postgresql types deal a lot with this type
-as the return value of any indexed accessor from a :class:`.JSON` type
-defaults to :class:`.NullType`, unless the new "type_schema" feature
-is used; see :ref:`change_3503` for details.
+The "unhashable" flag is also set on the :class:`.NullType` type,
+as :class:`.NullType` is used to refer to any expression of unknown
+type.
 
 Additionally, the treatment of a so-called "unhashable" type is slightly
 different than its been in previous releases; internally we are using
@@ -195,14 +191,6 @@ this is conditional based on the :paramref:`.postgresql.ARRAY.as_tuple`
 flag, however it should no longer be necessary to set this flag
 in order to have an array value present in a composed ORM row.
 
-Additionally, the type of an expression derived from indexed access
-of a :class:`.JSON` or :class:`.JSONB` type defaults to :class:`.NullType`,
-unless the new "type_schema" feature described in :ref:`change_3503` is used
-to define return types.  The change includes that :class:`.NullType` also
-properly defines ``hashable=False`` so that a sub-list or sub-dictionary
-returned by an index-accessed expression will by default not attempt
-to be hashed.
-
 .. seealso::
 
     :ref:`change_3499`
@@ -211,13 +199,54 @@ to be hashed.
 
 :ticket:`3499`
 
+.. _change_3503:
 
-ARRAY, JSON, HSTORE, JSONB marked 'unhashable', to allow ORM queries to proceed
--------------------------------------------------------------------------------
+Correct SQL Types are Established from Indexed Access of ARRAY, JSON, HSTORE
+-----------------------------------------------------------------------------
 
-This change will assist in these types being used in ORM queries without
-special steps; see the section :ref:`change_3499` for the full details.
+For all three of :class:`~.postgresql.ARRAY`, :class:`~.postgresql.JSON` and :class:`.HSTORE`,
+the SQL type assigned to the expression returned by indexed access, e.g.
+``col[someindex]``, should be correct in all cases.
 
+This includes:
+
+* The SQL type assigned to indexed access of an :class:`~.postgresql.ARRAY` takes into
+  account the number of dimensions configured.   An :class:`~.postgresql.ARRAY` with three
+  dimensions will return a SQL expression with a type of :class:`~.postgresql.ARRAY` of
+  one less dimension.  Given a column with type ``ARRAY(Integer, dimensions=3)``,
+  we can now perform this expression::
+
+      int_expr = col[5][6][7]   # returns an Integer expression object
+
+  Previously, the indexed access to ``col[5]`` would return an expression of
+  type :class:`.Integer` where we could no longer perform indexed access
+  for the remaining dimensions.
+
+* The :class:`~.postgresql.JSON` and :class:`~.postgresql.JSONB` types now mirror what Postgresql
+  itself does for indexed access.  This means that all indexed access for
+  a :class:`~.postgresql.JSON` or :class:`~.postgresql.JSONB` type returns an expression that itself
+  is *always* :class:`~.postgresql.JSON` or :class:`~.postgresql.JSONB` itself, unless the
+  :attr:`~.postgresql.JSON.Comparator.astext` modifier is used.   This means that whether
+  the indexed access of the JSON structure ultimately refers to a string,
+  list, number, or other JSON structure, Postgresql always considers it
+  to be JSON itself unless it is explicitly cast differently.   Like
+  the :class:`~.postgresql.ARRAY` type, this means that it is now straightforward
+  to produce JSON expressions with multiple levels of indexed access::
+
+    json_expr = json_col['key1']['attr1'][5]
+
+* The "textual" type that is returned by indexed access of :class:`.HSTORE`
+  as well as the "textual" type that is returned by indexed access of
+  :class:`~.postgresql.JSON` and :class:`~.postgresql.JSONB` in conjunction with the
+  :attr:`~.postgresql.JSON.Comparator.astext` modifier is now configurable; it defaults
+  to :class:`.Text` in both cases but can be set to a user-defined
+  type using the :paramref:`~.postgresql.JSON.astext_type` or
+  :paramref:`.HSTORE.text_type` parameters.
+
+
+
+:ticket:`3499`
+:ticket:`3487`
 
 Dialect Improvements and Changes - MySQL
 =============================================

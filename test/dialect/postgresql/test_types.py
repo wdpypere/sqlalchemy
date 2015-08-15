@@ -1559,7 +1559,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
         class MyType(types.UserDefinedType):
             pass
 
-        col = column('x', HSTORE(index_type=MyType))
+        col = column('x', HSTORE(text_type=MyType))
 
         is_(col['foo'].type.__class__, MyType)
 
