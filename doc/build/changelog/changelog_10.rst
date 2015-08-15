@@ -19,8 +19,31 @@
     :version: 1.0.9
 
     .. change::
+        :tags: bug, orm
+        :tickets: 3510
+        :versions: 1.1.0b1
+
+        Fixed 1.0 regression where the "noload" loader strategy would fail
+        to function for a many-to-one relationship.  The loader used an
+        API to place "None" into the dictionary which no longer actually
+        writes a value; this is a side effect of :ticket:`3061`.
+
+    .. change::
+        :tags: bug, sybase
+        :tickets: 3508, 3509
+        :versions: 1.1.0b1
+
+        Fixed two issues regarding Sybase reflection, allowing tables
+        without primary keys to be reflected as well as ensured that
+        a SQL statement involved in foreign key detection is pre-fetched up
+        front to avoid driver issues upon nested queries.  Fixes here
+        courtesy Eugene Zapolsky; note that we cannot currently test
+        Sybase to locally verify these changes.
+
+    .. change::
         :tags: bug, postgresql
         :pullreq: github:190
+        :versions: 1.1.0b1
 
         An adjustment to the new Postgresql feature of reflecting storage
         options and USING of :ticket:`3455` released in 1.0.6,
