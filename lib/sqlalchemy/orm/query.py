@@ -115,6 +115,7 @@ class Query(object):
             entity_wrapper = _QueryEntity
         self._entities = []
         self._primary_entity = None
+        self._has_mapper_entities = False
         for ent in util.to_list(entities):
             entity_wrapper(self, ent)
 

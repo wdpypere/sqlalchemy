@@ -2195,6 +2195,42 @@ class FilterTest(QueryTest, AssertsCompiledSQL):
         )
 
 
+class HasMapperEntitiesTest(QueryTest):
+    def test_entity(self):
+        User = self.classes.User
+        s = Session()
+
+        q = s.query(User)
+
+        assert q._has_mapper_entities
+
+    def test_cols(self):
+        User = self.classes.User
+        s = Session()
+
+        q = s.query(User.id)
+
+        assert not q._has_mapper_entities
+
+    def test_cols_set_entities(self):
+        User = self.classes.User
+        s = Session()
+
+        q = s.query(User.id)
+
+        q._set_entities(User)
+        assert q._has_mapper_entities
+
+    def test_entity_set_entities(self):
+        User = self.classes.User
+        s = Session()
+
+        q = s.query(User)
+
+        q._set_entities(User.id)
+        assert not q._has_mapper_entities
+
+
 class SetOpsTest(QueryTest, AssertsCompiledSQL):
     __dialect__ = 'default'
 
