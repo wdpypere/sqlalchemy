@@ -220,7 +220,7 @@ This includes:
 
   Previously, the indexed access to ``col[5]`` would return an expression of
   type :class:`.Integer` where we could no longer perform indexed access
-  for the remaining dimensions.
+  for the remaining dimensions, unless we used :func:`.cast` or :func:`.type_coerce`.
 
 * The :class:`~.postgresql.JSON` and :class:`~.postgresql.JSONB` types now mirror what Postgresql
   itself does for indexed access.  This means that all indexed access for
@@ -342,6 +342,10 @@ to::
 
     session.add_all([obj1, obj2])
     session.commit()
+
+.. seealso::
+
+    :ref:`change_3514`
 
 :ticket:`3514`
 
