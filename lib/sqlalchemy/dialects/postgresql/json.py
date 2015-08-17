@@ -96,11 +96,11 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
     * Path index operations returning text (the ``#>>`` operator)::
 
-        data_table.c.data[('key_1', 'key_2', ..., 'key_n')].astext == \\
-            'some value'
+        data_table.c.data[('key_1', 'key_2', ..., 'key_n')].astext == \
+'some value'
 
     .. versionchanged:: 1.1  The :meth:`.ColumnElement.cast` operator on
-       JSON objects now requires that the :meth:`.JSON.Comparator.astext`
+       JSON objects now requires that the :attr:`.JSON.Comparator.astext`
        modifier be called explicitly, if the cast works only from a textual
        string.
 
@@ -128,13 +128,15 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
         conn.execute(table.insert(), json_value=JSON.NULL)
 
-    The :class:`.JSON` type supports a flag :paramref:`.JSON.none_as_null`
-    which when set to True will result in the Python constant ``None``
-    evaluating to the value of SQL NULL, and when set to False evaluates
-    to the value of JSON ``"null"``.   The Python value ``None`` may be
-    used in conjunction with either :attr:`.JSON.NULL` and :func:`.null`
-    in order to indicate NULL values, but care must be taken as to the
-    value of the :paramref:`.JSON.none_as_null` in these cases.
+    The :class:`.JSON` type supports a flag
+    :paramref:`.JSON.none_as_null` which when set to True will result
+    in the Python constant ``None`` evaluating to the value of SQL
+    NULL, and when set to False results in the Python constant
+    ``None`` evaluating to the value of JSON ``"null"``.    The Python
+    value ``None`` may be used in conjunction with either
+    :attr:`.JSON.NULL` and :func:`.null` in order to indicate NULL
+    values, but care must be taken as to the value of the
+    :paramref:`.JSON.none_as_null` in these cases.
 
     Custom serializers and deserializers are specified at the dialect level,
     that is using :func:`.create_engine`.  The reason for this is that when
@@ -166,10 +168,21 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
     """Describe the json value of NULL.
 
     This value is used to force the JSON value of ``"null"`` to be
-    used as the value.   A value of Python ``None`` is normally recognized
-    as SQL NULL.  There are also some ORM scenarios where the ``none_as_null``
-    flag cannot be honored, so ``JSON.NULL`` should be used there as well.
+    used as the value.   A value of Python ``None`` will be recognized
+    either as SQL NULL or JSON ``"null"``, based on the setting
+    of the :paramref:`.JSON.none_as_null` flag; the :attr:`.JSON.NULL`
+    constant can be used to always resolve to JSON ``"null"`` regardless
+    of this setting.  This is in contrast to the :func:`.sql.null` construct,
+    which always resolves to SQL NULL.  E.g.::
 
+        from sqlalchemy import null
+        from sqlalchemy.dialects.postgresql import JSON
+
+        obj1 = MyObject(json_value=null())  # will *always* insert SQL NULL
+        obj2 = MyObject(json_value=JSON.NULL)  # will *always* insert JSON string "null"
+
+        session.add_all([obj1, obj2])
+        session.commit()
 
     .. versionadded:: 1.1
 
@@ -188,6 +201,10 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
          .. versionchanged:: 0.9.8 - Added ``none_as_null``, and :func:`.null`
             is now supported in order to persist a NULL value.
+
+         .. seealso::
+
+              :attr:`.JSON.NULL`
 
         :param astext_type: the type to use for the
          :attr:`.JSON.Comparator.astext`

@@ -508,6 +508,36 @@ dialect in conjunction with the :class:`.Table` construct:
     `Postgresql CREATE TABLE options
     <http://www.postgresql.org/docs/9.3/static/sql-createtable.html>`_
 
+ARRAY Types
+-----------
+
+The Postgresql dialect supports arrays, both as multidimensional column types
+as well as array literals:
+
+* :class:`.postgresql.ARRAY` - ARRAY datatype
+
+* :class:`.postgresql.array` - array literal
+
+JSON Types
+----------
+
+The Postgresql dialect supports both JSON and JSONB datatypes, including
+psycopg2's native support and support for all of Postgresql's special
+operators:
+
+* :class:`.postgresql.JSON`
+
+* :class:`.postgresql.JSONB`
+
+HSTORE Type
+-----------
+
+The Postgresql HSTORE type as well as hstore literals are supported:
+
+* :class:`.postgresql.HSTORE` - HSTORE datatype
+
+* :class:`.postgresql.hstore` - hstore literal
+
 ENUM Types
 ----------
 

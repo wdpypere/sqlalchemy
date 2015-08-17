@@ -1155,6 +1155,8 @@ class HashableFlagORMTest(fixtures.TestBase):
     """test the various 'collection' types that they flip the 'hashable' flag
     appropriately.  [ticket:3499]"""
 
+    __only_on__ = 'postgresql'
+
     def _test(self, type_, data):
         Base = declarative_base(metadata=self.metadata)
 
