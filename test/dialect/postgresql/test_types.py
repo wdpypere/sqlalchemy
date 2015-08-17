@@ -2396,6 +2396,15 @@ class JSONRoundTripTest(fixtures.TablesTest):
         ).fetchall()
         eq_([d for d, in data], [None])
 
+    def _assert_column_is_JSON_NULL(self, column='data'):
+        col = self.tables.data_table.c[column]
+
+        data = testing.db.execute(
+            select([col]).
+            where(cast(col, String) == "null")
+        ).fetchall()
+        eq_([d for d, in data], [None])
+
     def _test_insert(self, engine):
         engine.execute(
             self.tables.data_table.insert(),
@@ -2416,6 +2425,13 @@ class JSONRoundTripTest(fixtures.TablesTest):
             {'name': 'r1', 'nulldata': None}
         )
         self._assert_column_is_NULL(column='nulldata')
+
+    def _test_insert_nulljson_into_none_as_null(self, engine):
+        engine.execute(
+            self.tables.data_table.insert(),
+            {'name': 'r1', 'nulldata': JSON.NULL}
+        )
+        self._assert_column_is_JSON_NULL(column='nulldata')
 
     def _non_native_engine(self, json_serializer=None, json_deserializer=None):
         if json_serializer is not None or json_deserializer is not None:
@@ -2465,6 +2481,11 @@ class JSONRoundTripTest(fixtures.TablesTest):
         engine = testing.db
         self._test_insert_none_as_null(engine)
 
+    @testing.requires.psycopg2_native_json
+    def test_insert_native_nulljson_into_none_as_null(self):
+        engine = testing.db
+        self._test_insert_nulljson_into_none_as_null(engine)
+
     def test_insert_python(self):
         engine = self._non_native_engine()
         self._test_insert(engine)
@@ -2476,6 +2497,10 @@ class JSONRoundTripTest(fixtures.TablesTest):
     def test_insert_python_none_as_null(self):
         engine = self._non_native_engine()
         self._test_insert_none_as_null(engine)
+
+    def test_insert_python_nulljson_into_none_as_null(self):
+        engine = self._non_native_engine()
+        self._test_insert_nulljson_into_none_as_null(engine)
 
     def _test_custom_serialize_deserialize(self, native):
         import json
@@ -2642,6 +2667,26 @@ class JSONRoundTripTest(fixtures.TablesTest):
     def test_unicode_round_trip_native(self):
         engine = testing.db
         self._test_unicode_round_trip(engine)
+
+    def test_eval_none_flag_orm(self):
+        Base = declarative_base()
+
+        class Data(Base):
+            __table__ = self.tables.data_table
+
+        s = Session(testing.db)
+
+        d1 = Data(name='d1', data=None, nulldata=None)
+        s.add(d1)
+        s.commit()
+
+        eq_(
+            s.query(
+                cast(self.tables.data_table.c.data, String),
+                cast(self.tables.data_table.c.nulldata, String)
+            ).first(),
+            ("null", None)
+        )
 
 
 class JSONBTest(JSONTest):

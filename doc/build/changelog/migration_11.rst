@@ -244,9 +244,43 @@ This includes:
   :paramref:`.HSTORE.text_type` parameters.
 
 
-
 :ticket:`3499`
 :ticket:`3487`
+
+.. _change_3514:
+
+Postgresql JSON "'null'" is inserted as expected with ORM operations, defaults or not
+-------------------------------------------------------------------------------------
+
+The :class:`.JSON` type has a flag :paramref:`.JSON.none_as_null` which
+when set to True indicates that the Python value ``None`` should translate
+into a SQL NULL rather than a JSON NULL value.  This flag defaults to False,
+which means that the column should *never* insert SQL NULL or fall back
+to a default unless the :func:`.null` constant were used.  However, this would
+fail in the ORM under two circumstances; one is when the column also contained
+a default or server_default value, a positive value of ``None`` on the mapped
+attribute would still result in the column-level default being triggered,
+replacing the ``None`` value::
+
+    obj = MyObject(json_value=None)
+    session.add(obj)
+    session.commit()   # <-- would fire off default / server_default, not encode "'none'"
+
+The other is when the :meth:`.Session.bulk_insert_mappings`
+method were used, ``None`` would be ignored in all cases::
+
+    session.bulk_insert_mappings(
+        MyObject,
+        [{json_value=None}])  # would insert SQL NULL and/or trigger defaults
+
+The :class:`.JSON` type now adds a new flag :attr:`.TypeEngine.evaluates_none`
+indicating that ``None`` should not be ignored here.    Thanks to
+:ticket:`3061`, we can differentiate when the value ``None`` is actively
+set by the user versus when it was never set at all.   If the attribute is
+not set at all, then column level defaults *will* fire off and/or SQL NULL
+will be inserted as expected.
+
+:ticket:`3514`
 
 Dialect Improvements and Changes - MySQL
 =============================================
