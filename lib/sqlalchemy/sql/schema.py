@@ -572,18 +572,9 @@ class Table(DialectKWArgs, SchemaItem, TableClause):
     def _init_collections(self):
         pass
 
-    @util.memoized_property
+    @property
     def _autoincrement_column(self):
-        for col in self.primary_key:
-            if (col.autoincrement and col.type._type_affinity is not None and
-                    issubclass(col.type._type_affinity,
-                               type_api.INTEGERTYPE._type_affinity) and
-                    (not col.foreign_keys or
-                     col.autoincrement == 'ignore_fk') and
-                    isinstance(col.default, (type(None), Sequence)) and
-                    (col.server_default is None or
-                     col.server_default.reflected)):
-                return col
+        return self.primary_key._autoincrement_column
 
     @property
     def key(self):
@@ -1128,7 +1119,7 @@ class Column(SchemaItem, ColumnClause):
         self.system = kwargs.pop('system', False)
         self.doc = kwargs.pop('doc', None)
         self.onupdate = kwargs.pop('onupdate', None)
-        self.autoincrement = kwargs.pop('autoincrement', True)
+        self.autoincrement = kwargs.pop('autoincrement', "auto")
         self.constraints = set()
         self.foreign_keys = set()
 
@@ -1263,12 +1254,12 @@ class Column(SchemaItem, ColumnClause):
 
         if self.primary_key:
             table.primary_key._replace(self)
-            Table._autoincrement_column._reset(table)
         elif self.key in table.primary_key:
             raise exc.ArgumentError(
                 "Trying to redefine primary-key column '%s' as a "
                 "non-primary-key column on table '%s'" % (
                     self.key, table.fullname))
+
         self.table = table
 
         if self.index:
@@ -3025,10 +3016,95 @@ class PrimaryKeyConstraint(ColumnCollectionConstraint):
 
         self.columns.extend(columns)
 
+        PrimaryKeyConstraint._autoincrement_column._reset(self)
         self._set_parent_with_dispatch(self.table)
 
     def _replace(self, col):
+        PrimaryKeyConstraint._autoincrement_column._reset(self)
         self.columns.replace(col)
+
+    @property
+    def columns_autoinc_first(self):
+        autoinc = self._autoincrement_column
+
+        if autoinc is not None:
+            return [autoinc] + [c for c in self.columns if c is not autoinc]
+        else:
+            return list(self.columns)
+
+    @util.memoized_property
+    def _autoincrement_column(self):
+
+        def _validate_autoinc(col, raise_):
+            if not issubclass(
+                col.type._type_affinity,
+                    type_api.INTEGERTYPE._type_affinity):
+                if raise_:
+                    raise exc.ArgumentError(
+                        "Column type %s on column %s.%s is not "
+                        "compatible with autoincrement=True" % (
+                            col.type,
+                            col.table.fullname, col.name
+                        ))
+                else:
+                    return False
+            elif not isinstance(col.default, (type(None), Sequence)):
+                if raise_:
+                    raise exc.ArgumentError(
+                        "Column default %s on column %s.%s is not "
+                        "compatible with autoincrement=True" % (
+                            col.default,
+                            col.table.fullname, col.name
+                        )
+                    )
+                else:
+                    return False
+            elif (
+                col.server_default is not None and
+                    not col.server_default.reflected):
+                if raise_:
+                    raise exc.ArgumentError(
+                        "Column server default %s on column %s.%s is not "
+                        "compatible with autoincrement=True" % (
+                            col.server_default,
+                            col.table.fullname, col.name
+                        )
+                    )
+                else:
+                    return False
+            elif (
+                    col.foreign_keys and col.autoincrement
+                    not in (True, 'ignore_fk')):
+                return False
+            return True
+
+        if len(self.columns) == 1:
+            col = list(self.columns)[0]
+
+            if col.autoincrement is True:
+                _validate_autoinc(col, True)
+                return col
+            elif (
+                col.autoincrement in ('auto', 'ignore_fk') and
+                    _validate_autoinc(col, False)
+            ):
+                return col
+
+        else:
+            autoinc = None
+            for col in self.columns:
+                if col.autoincrement is True:
+                    _validate_autoinc(col, True)
+                    if autoinc is not None:
+                        raise exc.ArgumentError(
+                            "Only one Column may be marked "
+                            "autoincrement=True, found both %s and %s." %
+                            (col.name, autoinc.name)
+                        )
+                    else:
+                        autoinc = col
+
+            return autoinc
 
 
 class UniqueConstraint(ColumnCollectionConstraint):
