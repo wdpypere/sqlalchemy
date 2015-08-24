@@ -74,6 +74,9 @@ def Column(*args, **kw):
     if 'test_needs_autoincrement' in test_opts and \
             kw.get('primary_key', False):
 
+        if col.default is None and col.server_default is None:
+            col.autoincrement = True
+
         # allow any test suite to pick up on this
         col.info['test_needs_autoincrement'] = True
 

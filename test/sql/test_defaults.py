@@ -735,8 +735,9 @@ class AutoIncrementTest(fixtures.TablesTest):
             # mysql in legacy mode fails on second row
             nonai.insert().execute(data='row 1')
             nonai.insert().execute(data='row 2')
-        assert_raises(
-            sa.exc.DBAPIError,
+        assert_raises_message(
+            sa.exc.CompileError,
+            ".*has no Python-side or server-side default.*",
             go
         )
 
