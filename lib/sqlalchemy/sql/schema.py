@@ -3036,7 +3036,7 @@ class PrimaryKeyConstraint(ColumnCollectionConstraint):
     def _autoincrement_column(self):
 
         def _validate_autoinc(col, raise_):
-            if not issubclass(
+            if col.type._type_affinity is None or not issubclass(
                 col.type._type_affinity,
                     type_api.INTEGERTYPE._type_affinity):
                 if raise_:
