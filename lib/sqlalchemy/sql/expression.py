@@ -21,7 +21,8 @@ __all__ = [
     'bindparam', 'case', 'cast', 'column', 'delete', 'desc', 'distinct',
     'except_', 'except_all', 'exists', 'extract', 'func', 'modifier',
     'collate', 'insert', 'intersect', 'intersect_all', 'join', 'label',
-    'literal', 'literal_column', 'not_', 'null', 'nullsfirst', 'nullslast',
+    'lateral', 'literal', 'literal_column', 'not_', 'null', 'nullsfirst',
+    'nullslast',
     'or_', 'outparam', 'outerjoin', 'over', 'select', 'subquery',
     'table', 'text',
     'tuple_', 'type_coerce', 'union', 'union_all', 'update', 'within_group']
@@ -46,7 +47,7 @@ from .base import ColumnCollection, Generative, Executable, \
 
 from .selectable import Alias, Join, Select, Selectable, TableClause, \
     CompoundSelect, CTE, FromClause, FromGrouping, SelectBase, \
-    alias, GenerativeSelect, \
+    alias, lateral, GenerativeSelect, \
     subquery, HasPrefixes, HasSuffixes, Exists, ScalarSelect, TextAsFrom
 
 

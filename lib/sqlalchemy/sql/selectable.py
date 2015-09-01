@@ -161,6 +161,23 @@ def alias(selectable, name=None, flat=False):
     return selectable.alias(name=name, flat=flat)
 
 
+def lateral(selectable, name=None):
+    """Return a :class:`.Lateral` object.
+
+    :class:`.Lateral` is an :class:`.Alias` subclass that represents
+    a subquery with the LATERAL keyword applied to it.
+
+    The special behavior of a LATERAL subquery is that it appears in the
+    FROM clause of an enclosing SELECT, but may correlate to other
+    FROM clauses of that SELECT.   It is a special case of subquery
+    only supported by a small number of backends, currently Postgresql.
+
+    .. versionadded:: 1.1
+
+    """
+    return selectable.lateral(name=name)
+
+
 class Selectable(ClauseElement):
     """mark a class as being selectable"""
     __visit_name__ = 'selectable'
@@ -402,6 +419,16 @@ class FromClause(Selectable):
         """
 
         return Alias(self, name)
+
+    def lateral(self, name=None):
+        """Return a LATERAL alias of this :class:`.FromClause`.
+
+        See :func:`~.expression.lateral` for details.
+
+        .. versionadded:: 1.1
+
+        """
+        return Lateral(self, name)
 
     def is_derived_from(self, fromclause):
         """Return True if this FromClause is 'derived' from the given
@@ -1168,6 +1195,26 @@ class Alias(FromClause):
     @property
     def bind(self):
         return self.element.bind
+
+
+class Lateral(Alias):
+    """Represent a LATERAL subquery.
+
+    This object is constructed from the :func:`~.expression.lateral` module
+    level function as well as the :meth:`.FromClause.lateral` method available
+    on all :class:`.FromClause` subclasses.
+
+    .. versionadded:: 1.1
+
+    .. seealso::
+
+        :func:`.expression.lateral`
+
+        :meth:`.FromClause.lateral`
+
+    """
+
+    __visit_name__ = 'lateral'
 
 
 class CTE(Generative, HasSuffixes, Alias):
