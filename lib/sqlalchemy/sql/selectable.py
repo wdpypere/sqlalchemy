@@ -427,8 +427,95 @@ class FromClause(Selectable):
 
         .. versionadded:: 1.1
 
+        .. seealso::
+
+            :meth:`.FromClause.join_lateral`
+
         """
         return Lateral(self, name)
+
+    def join_lateral(self, right, onclause=None, name=None):
+        """Return a JOIN of this FromClause to a :class:`.Table`
+        or :class:`.Select`, using a correlated SELECT in conjunction with
+        LATERAL.
+
+        E.g.::
+
+
+            subq = select([addresses.c.id])
+
+            stmt = select([users]).select_from(
+                users.join_lateral(subq)
+            )
+
+        Would produce the statement::
+
+            SELECT users.id, users.name, users.fullname
+            FROM users JOIN LATERAL (SELECT addresses.id AS id
+            FROM addresses
+            WHERE users.id = addresses.user_id) AS anon_1 ON true
+
+        If ``right`` is an existing :class:`.Select` object, this
+        call is equivalent to::
+
+            left.join(
+                right.where(onclause).correlate(self).lateral(name),
+                true()
+            )
+
+        If ``right`` is a :class:`.Table`, the call is equivalent to::
+
+            left.join(
+                select([right]).where(onclause).correlate(self).lateral(name),
+                true()
+            )
+
+        If ``right`` is a :class:`.Alias`, the "element" of the :class:`.Alias`
+        is extracted and used as the right side; since we are generating
+        a subquery, there is never a need for the "right" side to itself
+        be an "alias"; the :func:`.lateral` construct provides this.
+
+        The "onclause", if not specified, will be automatically
+        generated from foreign key constraints in the same way as
+        :meth:`.FromClause.join` if omitted; the difference between
+        this an a plain JOIN is that this criteria is used as the
+        WHERE clause of the correlated select.   To use this feature,
+        the right side must refer to an unambiguous FROM clause to
+        join to; if the right side contains multiple FROM clauses besides
+        this one, an exception is raised and the "onclause" should be
+        passed explicitly.
+
+
+        .. versionadded:: 1.1
+
+        .. seealso::
+
+            :meth:`.FromClause.lateral`
+
+        """
+
+        if isinstance(right, Alias):
+            right = right.original
+
+        if isinstance(right, Select):
+            to_select = right
+        else:
+            to_select = Select([right])
+
+        if onclause is None:
+            froms = [
+                f for f in to_select._froms if not f.is_derived_from(self)]
+            if len(froms) != 1:
+                raise exc.ArgumentError(
+                    "select() passed to join_lateral has mulitple "
+                    "FROM clauses; specify the ON clause of this "
+                    "JOIN LATERAL explicitly.")
+            to_onclause = froms[0]
+            onclause = self.join(to_onclause).onclause
+
+        return self.join(to_select.
+                         where(onclause).correlate(self).lateral(name),
+                         True_())
 
     def is_derived_from(self, fromclause):
         """Return True if this FromClause is 'derived' from the given

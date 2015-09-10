@@ -1634,7 +1634,7 @@ class SQLCompiler(Compiled):
 
         self.stack.pop(-1)
 
-        if asfrom and parens:
+        if (asfrom or lateral) and parens:
             return "(" + text + ")"
         else:
             return text
@@ -1689,6 +1689,7 @@ class SQLCompiler(Compiled):
             'selectable': select,
         }
         self.stack.append(new_entry)
+
         return froms
 
     def _compose_select_body(
