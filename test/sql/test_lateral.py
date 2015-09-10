@@ -99,52 +99,13 @@ class LateralTest(fixtures.TablesTest, AssertsCompiledSQL):
             "AS alias ON true"
         )
 
-    def test_join_lateral_auto_onclause_table(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-
-        stmt = select([table1]).select_from(
-            table1.join_lateral(table2)
-        )
-
-        self.assert_compile(
-            stmt,
-            "SELECT people.people_id, people.age, people.name "
-            "FROM people JOIN LATERAL (SELECT books.book_id AS book_id, "
-            "books.bookcase_id AS bookcase_id, books.book_owner_id "
-            "AS book_owner_id, books.book_weight AS book_weight "
-            "FROM books "
-            "WHERE people.people_id = books.book_owner_id) AS anon_1 "
-            "ON true"
-        )
-
-    def test_join_lateral_explicit_onclause_table(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-
-        stmt = select([table1]).select_from(
-            table1.join_lateral(
-                table2, table1.c.people_id == table2.c.book_owner_id)
-        )
-
-        self.assert_compile(
-            stmt,
-            "SELECT people.people_id, people.age, people.name "
-            "FROM people JOIN LATERAL (SELECT books.book_id AS book_id, "
-            "books.bookcase_id AS bookcase_id, books.book_owner_id "
-            "AS book_owner_id, books.book_weight AS book_weight "
-            "FROM books "
-            "WHERE people.people_id = books.book_owner_id) AS anon_1 "
-            "ON true"
-        )
-
     def test_join_lateral_auto_onclause_subquery(self):
         table1 = self.tables.people
         table2 = self.tables.books
 
-        subq = select([table2.c.book_id])
+        subq = select([table2.c.book_id]).correlate_from(table1).lateral()
         stmt = select([table1]).select_from(
-            table1.join_lateral(subq)
+            table1.join(subq, true())
         )
 
         self.assert_compile(
@@ -155,90 +116,20 @@ class LateralTest(fixtures.TablesTest, AssertsCompiledSQL):
             "WHERE people.people_id = books.book_owner_id) AS anon_1 ON true"
         )
 
-    def test_join_lateral_auto_onclause_aliased_subquery(self):
+    def test_join_lateral_w_select_auto_onclause_subquery(self):
         table1 = self.tables.people
         table2 = self.tables.books
 
-        subq = select([table2.c.book_id]).alias('foo')
-        stmt = select([table1]).select_from(
-            table1.join_lateral(subq)
-        )
+        subq = select([table2.c.book_id]).correlate_from(table1).lateral()
+        stmt = select([table1, subq.c.book_id]).\
+            select_from(table1.join(subq, true()))
 
-        # alias is unwrapped (and anonymized; 'foo' might be used elsewhere)
         self.assert_compile(
             stmt,
-            "SELECT people.people_id, people.age, people.name "
+            "SELECT people.people_id, people.age, people.name, anon_1.book_id "
             "FROM people JOIN LATERAL (SELECT books.book_id AS book_id "
             "FROM books "
             "WHERE people.people_id = books.book_owner_id) AS anon_1 ON true"
-        )
-
-    def test_join_lateral_auto_onclause_aliased_subquery_plus_name(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-
-        subq = select([table2.c.book_id]).alias('foo')
-        stmt = select([table1]).select_from(
-            table1.join_lateral(subq, name='bar')
-        )
-
-        self.assert_compile(
-            stmt,
-            "SELECT people.people_id, people.age, people.name "
-            "FROM people JOIN LATERAL (SELECT books.book_id AS book_id "
-            "FROM books "
-            "WHERE people.people_id = books.book_owner_id) AS bar ON true"
-        )
-
-    def test_join_lateral_auto_onclause_aliased_table(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-
-        alias_ = table2.alias('foo')
-        stmt = select([table1]).select_from(
-            table1.join_lateral(alias_)
-        )
-
-        # alias is unwrapped (and anonymized; 'foo' might be used elsewhere)
-        self.assert_compile(
-            stmt,
-            "SELECT people.people_id, people.age, people.name "
-            "FROM people JOIN LATERAL (SELECT books.book_id AS book_id, "
-            "books.bookcase_id AS bookcase_id, books.book_owner_id "
-            "AS book_owner_id, books.book_weight AS book_weight "
-            "FROM books "
-            "WHERE people.people_id = books.book_owner_id) AS anon_1 "
-            "ON true"
-        )
-
-    def test_join_lateral_explicit_onclause_subquery(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-
-        subq = select([table2.c.book_id])
-        stmt = select([table1]).select_from(
-            table1.join_lateral(
-                subq, table1.c.people_id == table2.c.book_owner_id)
-        )
-
-        self.assert_compile(
-            stmt,
-            "SELECT people.people_id, people.age, people.name "
-            "FROM people JOIN LATERAL (SELECT books.book_id AS book_id "
-            "FROM books "
-            "WHERE people.people_id = books.book_owner_id) AS anon_1 ON true"
-        )
-
-    def test_join_lateral_auto_onclause_ambiguous(self):
-        table1 = self.tables.people
-        table2 = self.tables.books
-        table3 = self.tables.bookcases
-
-        subq = select([table2.c.book_id, table3.c.bookcase_width])
-        assert_raises_message(
-            exc.ArgumentError,
-            "passed to join_lateral has mulitple FROM clauses",
-            table1.join_lateral, subq
         )
 
     def test_from_function(self):
