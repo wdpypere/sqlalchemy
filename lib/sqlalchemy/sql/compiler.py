@@ -97,6 +97,8 @@ OPERATORS = {
     operators.exists: 'EXISTS ',
     operators.distinct_op: 'DISTINCT ',
     operators.inv: 'NOT ',
+    operators.any_op: 'ANY ',
+    operators.all_op: 'ALL ',
 
     # modifiers
     operators.desc_op: ' DESC',
@@ -281,6 +283,8 @@ class _CompileLabel(visitors.Visitable):
     def type(self):
         return self.element.type
 
+    def self_group(self, **kw):
+        return self
 
 class SQLCompiler(Compiled):
 
@@ -761,6 +765,9 @@ class SQLCompiler(Compiled):
         x += "END"
         return x
 
+    def visit_type_coerce(self, type_coerce, **kw):
+        return type_coerce.typed_expression._compiler_dispatch(self, **kw)
+
     def visit_cast(self, cast, **kwargs):
         return "CAST(%s AS %s)" % \
             (cast.clause._compiler_dispatch(self, **kwargs),
@@ -768,7 +775,7 @@ class SQLCompiler(Compiled):
 
     def visit_over(self, over, **kwargs):
         return "%s OVER (%s)" % (
-            over.func._compiler_dispatch(self, **kwargs),
+            over.element._compiler_dispatch(self, **kwargs),
             ' '.join(
                 '%s BY %s' % (word, clause._compiler_dispatch(self, **kwargs))
                 for word, clause in (
@@ -777,6 +784,12 @@ class SQLCompiler(Compiled):
                 )
                 if clause is not None and len(clause)
             )
+        )
+
+    def visit_withingroup(self, withingroup, **kwargs):
+        return "%s WITHIN GROUP (ORDER BY %s)" % (
+            withingroup.element._compiler_dispatch(self, **kwargs),
+            withingroup.order_by._compiler_dispatch(self, **kwargs)
         )
 
     def visit_funcfilter(self, funcfilter, **kwargs):

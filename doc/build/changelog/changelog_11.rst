@@ -22,6 +22,198 @@
     :version: 1.1.0b1
 
     .. change::
+        :tags: change, mssql
+        :tickets: 3434
+
+        The ``legacy_schema_aliasing`` flag, introduced in version 1.0.5
+        as part of :ticket:`3424` to allow disabling of the MSSQL dialect's
+        attempts to create aliases for schema-qualified tables, now defaults
+        to False; the old behavior is now disabled unless explicitly turned on.
+
+        .. seealso::
+
+            :ref:`change_3434`
+
+    .. change::
+        :tags: bug, orm
+        :tickets: 3250
+
+        Added a new type-level modifier :meth:`.TypeEngine.evaluates_none`
+        which indicates to the ORM that a positive set of None should be
+        persisted as the value NULL, instead of omitting the column from
+        the INSERT statement.  This feature is used both as part of the
+        implementation for :ticket:`3514` as well as a standalone feature
+        available on any type.
+
+        .. seealso::
+
+            :ref:`change_3250`
+
+    .. change::
+        :tags: bug, postgresql
+        :tickets: 2729
+
+        The use of a :class:`.postgresql.ARRAY` object that refers
+        to a :class:`.types.Enum` or :class:`.postgresql.ENUM` subtype
+        will now emit the expected "CREATE TYPE" and "DROP TYPE" DDL when
+        the type is used within a "CREATE TABLE" or "DROP TABLE".
+
+        .. seealso::
+
+            :ref:`change_2729`
+
+    .. change::
+        :tags: bug, sql
+        :tickets: 3531
+
+        The :func:`.type_coerce` construct is now a fully fledged Core
+        expression element which is late-evaluated at compile time.  Previously,
+        the function was only a conversion function which would handle different
+        expression inputs by returning either a :class:`.Label` of a column-oriented
+        expression or a copy of a given :class:`.BindParameter` object,
+        which in particular prevented the operation from being logically
+        maintained when an ORM-level expression transformation would convert
+        a column to a bound parameter (e.g. for lazy loading).
+
+        .. seealso::
+
+            :ref:`change_3531`
+
+    .. change::
+        :tags: bug, orm
+        :tickets: 3526
+
+        Internal calls to "bookkeeping" functions within
+        :meth:`.Session.bulk_save_objects` and related bulk methods have
+        been scaled back to the extent that this functionality is not
+        currently used, e.g. checks for column default values to be
+        fetched after an INSERT or UPDATE statement.
+
+    .. change::
+        :tags: feature, orm
+        :tickets: 2677
+
+        The :class:`.SessionEvents` suite now includes events to allow
+        unambiguous tracking of all object lifecycle state transitions
+        in terms of the :class:`.Session` itself, e.g. pending,
+        transient,  persistent, detached.   The state of the object
+        within each event is also defined.
+
+        .. seealso::
+
+            :ref:`change_2677`
+
+    .. change::
+        :tags: feature, orm
+        :tickets: 2677
+
+        Added a new session lifecycle state :term:`deleted`.  This new state
+        represents an object that has been deleted from the :term:`persistent`
+        state and will move to the :term:`detached` state once the transaction
+        is committed.  This resolves the long-standing issue that objects
+        which were deleted existed in a gray area between persistent and
+        detached.   The :attr:`.InstanceState.persistent` accessor will
+        **no longer** report on a deleted object as persistent; the
+        :attr:`.InstanceState.deleted` accessor will instead be True for
+        these objects, until they become detached.
+
+        .. seealso::
+
+            :ref:`change_2677`
+
+    .. change::
+        :tags: change, orm
+        :tickets: 2677
+
+        The :paramref:`.Session.weak_identity_map` parameter is deprecated.
+        See the new recipe at :ref:`session_referencing_behavior` for
+        an event-based approach to maintaining strong identity map behavior.
+
+        .. seealso::
+
+            :ref:`change_2677`
+
+    .. change::
+        :tags: bug, sql
+        :tickets: 2919
+
+        The :class:`.TypeDecorator` type extender will now work in conjunction
+        with a :class:`.SchemaType` implementation, typically :class:`.Enum`
+        or :class:`.Boolean` with regards to ensuring that the per-table
+        events are propagated from the implementation type to the outer type.
+        These events are used
+        to ensure that the constraints or Postgresql types (e.g. ENUM)
+        are correctly created (and possibly dropped) along with the parent
+        table.
+
+        .. seealso::
+
+            :ref:`change_2919`
+
+    .. change::
+        :tags: feature, sql
+        :tickets: 1370
+
+        Added support for "set-aggregate" functions of the form
+        ``<function> WITHIN GROUP (ORDER BY <criteria>)``, using the
+        method :meth:`.FunctionElement.within_group`.  A series of common
+        set-aggregate functions with return types derived from the set have
+        been added. This includes functions like :class:`.percentile_cont`,
+        :class:`.dense_rank` and others.
+
+        .. seealso::
+
+            :ref:`change_3132`
+
+    .. change::
+        :tags: feature, sql, postgresql
+        :tickets: 3132
+
+        Added support for the SQL-standard function :class:`.array_agg`,
+        which automatically returns an :class:`.Array` of the correct type
+        and supports index / slice operations, as well as
+        :func:`.postgresql.array_agg`, which returns a :class:`.postgresql.ARRAY`
+        with additional comparison features.   As arrays are only
+        supported on Postgresql at the moment, only actually works on
+        Postgresql.  Also added a new construct
+        :class:`.postgresql.aggregate_order_by` in support of PG's
+        "ORDER BY" extension.
+
+        .. seealso::
+
+            :ref:`change_3132`
+
+    .. change::
+        :tags: feature, sql
+        :tickets: 3516
+
+        Added a new type to core :class:`.types.Array`.  This is the
+        base of the PostgreSQL :class:`.ARRAY` type, and is now part of Core
+        to begin supporting various SQL-standard array-supporting features
+        including some functions and eventual support for native arrays
+        on other databases that have an "array" concept, such as DB2 or Oracle.
+        Additionally, new operators :func:`.expression.any_` and
+        :func:`.expression.all_` have been added.  These support not just
+        array constructs on Postgresql, but also subqueries that are usable
+        on MySQL (but sadly not on Postgresql).
+
+        .. seealso::
+
+            :ref:`change_3516`
+
+    .. change::
+        :tags: feature, orm
+        :tickets: 3321
+
+        Added new checks for the common error case of passing mapped classes
+        or mapped instances into contexts where they are interpreted as
+        SQL bound parameters; a new exception is raised for this.
+
+        .. seealso::
+
+            :ref:`change_3321`
+
+    .. change::
         :tags: bug, postgresql
         :tickets: 3499
 
@@ -113,6 +305,8 @@
         .. seealso::
 
             :ref:`change_3514`
+
+            :ref:`change_3250`
 
     .. change::
         :tags: feature, postgresql

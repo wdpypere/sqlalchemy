@@ -19,6 +19,53 @@
     :version: 1.0.9
 
     .. change::
+        :tags: feature, orm
+        :versions: 1.1.0b1
+        :pullreq: github:201
+
+        Added new method :meth:`.Query.one_or_none`; same as
+        :meth:`.Query.one` but returns None if no row found.  Pull request
+        courtesy esiegerman.
+
+    .. change::
+        :tags: bug, orm
+        :versions: 1.1.0b1
+        :tickets: 3539
+
+        Fixed rare TypeError which could occur when stringifying certain
+        kinds of internal column loader options within internal logging.
+
+    .. change::
+        :tags: bug, orm
+        :versions: 1.1.0b1
+        :tickets: 3525
+
+        Fixed bug in :meth:`.Session.bulk_save_objects` where a mapped
+        column that had some kind of "fetch on update" value and was not
+        locally present in the given object would cause an AttributeError
+        within the operation.
+
+    .. change::
+        :tags: bug, sql
+        :versions: 1.1.0b1
+        :tickets: 3520
+
+        Fixed regression in 1.0-released default-processor for multi-VALUES
+        insert statement, :ticket:`3288`, where the column type for the
+        default-holding column would not be propagated to the compiled
+        statement in the case where the default was being used,
+        leading to bind-level type handlers not being invoked.
+
+    .. change::
+        :tags: bug, examples
+        :versions: 1.1.0b1
+
+        Fixed two issues in the "history_meta" example where history tracking
+        could encounter empty history, and where a column keyed to an alternate
+        attribute name would fail to track properly.  Fixes courtesy
+        Alex Fraser.
+
+    .. change::
         :tags: bug, orm
         :tickets: 3510
         :versions: 1.1.0b1

@@ -2335,6 +2335,19 @@ class Query(object):
         """Apply a ``DISTINCT`` to the query and return the newly resulting
         ``Query``.
 
+
+        .. note::
+
+            The :meth:`.distinct` call includes logic that will automatically
+            add columns from the ORDER BY of the query to the columns
+            clause of the SELECT statement, to satisfy the common need
+            of the database backend that ORDER BY columns be part of the
+            SELECT list when DISTINCT is used.   These columns *are not*
+            added to the list of columns actually fetched by the
+            :class:`.Query`, however, so would not affect results.
+            The columns are passed through when using the
+            :attr:`.Query.statement` accessor, however.
+
         :param \*expr: optional column expressions.  When present,
          the Postgresql dialect will render a ``DISTINCT ON (<expressions>>)``
          construct.
@@ -2460,6 +2473,40 @@ class Query(object):
         else:
             return None
 
+    def one_or_none(self):
+        """Return at most one result or raise an exception.
+
+        Returns ``None`` if the query selects
+        no rows.  Raises ``sqlalchemy.orm.exc.MultipleResultsFound``
+        if multiple object identities are returned, or if multiple
+        rows are returned for a query that does not return object
+        identities.
+
+        Note that an entity query, that is, one which selects one or
+        more mapped classes as opposed to individual column attributes,
+        may ultimately represent many rows but only one row of
+        unique entity or entities - this is a successful result for
+        `one_or_none()`.
+
+        Calling ``one_or_none()`` results in an execution of the underlying
+        query.
+
+        .. versionadded:: 1.0.9
+
+            Added :meth:`.Query.one_or_none`
+
+        """
+        ret = list(self)
+
+        l = len(ret)
+        if l == 1:
+            return ret[0]
+        elif l == 0:
+            return None
+        else:
+            raise orm_exc.MultipleResultsFound(
+                "Multiple rows were found for one_or_none()")
+
     def one(self):
         """Return exactly one result or raise an exception.
 
@@ -2480,6 +2527,12 @@ class Query(object):
             ``one()`` fully fetches all results instead of applying
             any kind of limit, so that the "unique"-ing of entities does not
             conceal multiple object identities.
+
+        .. seealso::
+
+            :meth:`.Query.first`
+
+            :meth:`.Query.one_or_none`
 
         """
         ret = list(self)

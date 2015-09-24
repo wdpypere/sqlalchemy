@@ -7,7 +7,7 @@ from sqlalchemy import testing
 import datetime
 from sqlalchemy import Table, MetaData, Column, Integer, Enum, Float, select, \
     func, DateTime, Numeric, exc, String, cast, REAL, TypeDecorator, Unicode, \
-    Text, null, text, column
+    Text, null, text, column, Array, any_, all_
 from sqlalchemy.sql import operators
 from sqlalchemy import types
 import sqlalchemy as sa
@@ -499,6 +499,34 @@ class EnumTest(fixtures.TestBase, AssertsExecutionResults):
         finally:
             metadata.drop_all()
 
+    @testing.provide_metadata
+    def test_custom_subclass(self):
+        class MyEnum(TypeDecorator):
+            impl = Enum('oneHI', 'twoHI', 'threeHI', name='myenum')
+
+            def process_bind_param(self, value, dialect):
+                if value is not None:
+                    value += "HI"
+                return value
+
+            def process_result_value(self, value, dialect):
+                if value is not None:
+                    value += "THERE"
+                return value
+
+        t1 = Table(
+            'table1', self.metadata,
+            Column('data', MyEnum())
+        )
+        self.metadata.create_all(testing.db)
+
+        with testing.db.connect() as conn:
+            conn.execute(t1.insert(), {"data": "two"})
+            eq_(
+                conn.scalar(select([t1.c.data])),
+                "twoHITHERE"
+            )
+
 
 class OIDTest(fixtures.TestBase):
     __only_on__ = 'postgresql'
@@ -754,7 +782,6 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
             checkparams={'param_1': 4, 'param_3': 6, 'param_2': 5}
         )
 
-
     def test_array_slice_index(self):
         col = column('x', postgresql.ARRAY(Integer))
         self.assert_compile(
@@ -784,13 +811,19 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_array_index_map_dimensions(self):
         col = column('x', postgresql.ARRAY(Integer, dimensions=3))
         is_(
-            col[5].type._type_affinity, postgresql.ARRAY
+            col[5].type._type_affinity, Array
+        )
+        assert isinstance(
+            col[5].type, postgresql.ARRAY
         )
         eq_(
             col[5].type.dimensions, 2
         )
         is_(
-            col[5][6].type._type_affinity, postgresql.ARRAY
+            col[5][6].type._type_affinity, Array
+        )
+        assert isinstance(
+            col[5][6].type, postgresql.ARRAY
         )
         eq_(
             col[5][6].type.dimensions, 1
@@ -816,8 +849,54 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
             Column('intarr', postgresql.ARRAY(Integer)),
             Column('strarr', postgresql.ARRAY(String)),
         )
-        is_(arrtable.c.intarr[1:3].type._type_affinity, postgresql.ARRAY)
-        is_(arrtable.c.strarr[1:3].type._type_affinity, postgresql.ARRAY)
+
+        # type affinity is Array...
+        is_(arrtable.c.intarr[1:3].type._type_affinity, Array)
+        is_(arrtable.c.strarr[1:3].type._type_affinity, Array)
+
+        # but the slice returns the actual type
+        assert isinstance(arrtable.c.intarr[1:3].type, postgresql.ARRAY)
+        assert isinstance(arrtable.c.strarr[1:3].type, postgresql.ARRAY)
+
+    def test_array_functions_plus_getitem(self):
+        """test parenthesizing of functions plus indexing, which seems
+        to be required by Postgresql.
+
+        """
+        stmt = select([
+            func.array_cat(
+                array([1, 2, 3]),
+                array([4, 5, 6]),
+                type_=postgresql.ARRAY(Integer)
+            )[2:5]
+        ])
+        self.assert_compile(
+            stmt,
+            "SELECT (array_cat(ARRAY[%(param_1)s, %(param_2)s, %(param_3)s], "
+            "ARRAY[%(param_4)s, %(param_5)s, %(param_6)s]))"
+            "[%(param_7)s:%(param_8)s] AS anon_1"
+        )
+
+        self.assert_compile(
+            func.array_cat(
+                array([1, 2, 3]),
+                array([4, 5, 6]),
+                type_=postgresql.ARRAY(Integer)
+            )[3],
+            "(array_cat(ARRAY[%(param_1)s, %(param_2)s, %(param_3)s], "
+            "ARRAY[%(param_4)s, %(param_5)s, %(param_6)s]))[%(param_7)s]"
+        )
+
+    def test_array_agg_generic(self):
+        expr = func.array_agg(column('q', Integer))
+        is_(expr.type.__class__, types.Array)
+        is_(expr.type.item_type.__class__, Integer)
+
+    def test_array_agg_specific(self):
+        from sqlalchemy.dialects.postgresql import array_agg
+        expr = array_agg(column('q', Integer))
+        is_(expr.type.__class__, postgresql.ARRAY)
+        is_(expr.type.item_type.__class__, Integer)
 
 
 class ArrayRoundTripTest(fixtures.TablesTest, AssertsExecutionResults):
@@ -875,6 +954,89 @@ class ArrayRoundTripTest(fixtures.TablesTest, AssertsExecutionResults):
         assert isinstance(tbl.c.strarr.type, postgresql.ARRAY)
         assert isinstance(tbl.c.intarr.type.item_type, Integer)
         assert isinstance(tbl.c.strarr.type.item_type, String)
+
+    @testing.provide_metadata
+    def test_array_agg(self):
+        values_table = Table('values', self.metadata, Column('value', Integer))
+        self.metadata.create_all(testing.db)
+        testing.db.execute(
+            values_table.insert(),
+            [{'value': i} for i in range(1, 10)]
+        )
+
+        stmt = select([func.array_agg(values_table.c.value)])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            list(range(1, 10))
+        )
+
+        stmt = select([func.array_agg(values_table.c.value)[3]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            3
+        )
+
+        stmt = select([func.array_agg(values_table.c.value)[2:4]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            [2, 3, 4]
+        )
+
+    def test_array_index_slice_exprs(self):
+        """test a variety of expressions that sometimes need parenthesizing"""
+
+        stmt = select([array([1, 2, 3, 4])[2:3]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            [2, 3]
+        )
+
+        stmt = select([array([1, 2, 3, 4])[2]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            2
+        )
+
+        stmt = select([(array([1, 2]) + array([3, 4]))[2:3]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            [2, 3]
+        )
+
+        stmt = select([array([1, 2]) + array([3, 4])[2:3]])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            [1, 2, 4]
+        )
+
+        stmt = select([array([1, 2])[2:3] + array([3, 4])])
+        eq_(
+            testing.db.execute(stmt).scalar(),
+            [2, 3, 4]
+        )
+
+        stmt = select([
+            func.array_cat(
+                array([1, 2, 3]),
+                array([4, 5, 6]),
+                type_=postgresql.ARRAY(Integer)
+            )[2:5]
+        ])
+        eq_(
+            testing.db.execute(stmt).scalar(), [2, 3, 4, 5]
+        )
+
+    def test_any_all_exprs(self):
+        stmt = select([
+            3 == any_(func.array_cat(
+                array([1, 2, 3]),
+                array([4, 5, 6]),
+                type_=postgresql.ARRAY(Integer)
+            ))
+        ])
+        eq_(
+            testing.db.execute(stmt).scalar(), True
+        )
 
     def test_insert_array(self):
         arrtable = self.tables.arrtable
@@ -1149,6 +1311,32 @@ class ArrayRoundTripTest(fixtures.TablesTest, AssertsExecutionResults):
             set(row[1] for row in r),
             set([('1', '2', '3'), ('4', '5', '6'), (('4', '5'), ('6', '7'))])
         )
+
+    def test_array_plus_native_enum_create(self):
+        m = MetaData()
+        t = Table(
+            't', m,
+            Column(
+                'data_1',
+                postgresql.ARRAY(
+                    postgresql.ENUM('a', 'b', 'c', name='my_enum_1')
+                )
+            ),
+            Column(
+                'data_2',
+                postgresql.ARRAY(
+                    types.Enum('a', 'b', 'c', name='my_enum_2')
+                )
+            )
+        )
+
+        t.create(testing.db)
+        eq_(
+            set(e['name'] for e in inspect(testing.db).get_enums()),
+            set(['my_enum_1', 'my_enum_2'])
+        )
+        t.drop(testing.db)
+        eq_(inspect(testing.db).get_enums(), [])
 
 
 class HashableFlagORMTest(fixtures.TestBase):
@@ -1587,7 +1775,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_where_defined(self):
         self._test_where(
             self.hashcol.defined('foo'),
-            "defined(test_table.hash, %(param_1)s)"
+            "defined(test_table.hash, %(defined_1)s)"
         )
 
     def test_where_contains(self):
@@ -1618,7 +1806,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_cols_delete_single_key(self):
         self._test_cols(
             self.hashcol.delete('foo'),
-            "delete(test_table.hash, %(param_1)s) AS delete_1",
+            "delete(test_table.hash, %(delete_2)s) AS delete_1",
             True
         )
 
@@ -1633,7 +1821,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_cols_delete_matching_pairs(self):
         self._test_cols(
             self.hashcol.delete(hstore('1', '2')),
-            ("delete(test_table.hash, hstore(%(param_1)s, %(param_2)s)) "
+            ("delete(test_table.hash, hstore(%(hstore_1)s, %(hstore_2)s)) "
              "AS delete_1"),
             True
         )
@@ -1649,7 +1837,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_cols_hstore_pair_text(self):
         self._test_cols(
             hstore('foo', '3')['foo'],
-            "hstore(%(param_1)s, %(param_2)s) -> %(hstore_1)s AS anon_1",
+            "hstore(%(hstore_1)s, %(hstore_2)s) -> %(hstore_3)s AS anon_1",
             False
         )
 
@@ -1674,14 +1862,14 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
         self._test_cols(
             self.hashcol.concat(hstore(cast(self.test_table.c.id, Text), '3')),
             ("test_table.hash || hstore(CAST(test_table.id AS TEXT), "
-             "%(param_1)s) AS anon_1"),
+             "%(hstore_1)s) AS anon_1"),
             True
         )
 
     def test_cols_concat_op(self):
         self._test_cols(
             hstore('foo', 'bar') + self.hashcol,
-            "hstore(%(param_1)s, %(param_2)s) || test_table.hash AS anon_1",
+            "hstore(%(hstore_1)s, %(hstore_2)s) || test_table.hash AS anon_1",
             True
         )
 

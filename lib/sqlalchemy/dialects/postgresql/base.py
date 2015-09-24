@@ -518,6 +518,11 @@ as well as array literals:
 
 * :class:`.postgresql.array` - array literal
 
+* :func:`.postgresql.array_agg` - ARRAY_AGG SQL function
+
+* :class:`.postgresql.aggregate_order_by` - helper for PG's ORDER BY aggregate
+  function syntax.
+
 JSON Types
 ----------
 
@@ -1045,24 +1050,16 @@ class PGCompiler(compiler.SQLCompiler):
             self.process(element.stop, **kw),
         )
 
-    def visit_any(self, element, **kw):
-        return "%s%sANY (%s)" % (
-            self.process(element.left, **kw),
-            compiler.OPERATORS[element.operator],
-            self.process(element.right, **kw)
-        )
-
-    def visit_all(self, element, **kw):
-        return "%s%sALL (%s)" % (
-            self.process(element.left, **kw),
-            compiler.OPERATORS[element.operator],
-            self.process(element.right, **kw)
-        )
-
     def visit_getitem_binary(self, binary, operator, **kw):
         return "%s[%s]" % (
             self.process(binary.left, **kw),
             self.process(binary.right, **kw)
+        )
+
+    def visit_aggregate_order_by(self, element, **kw):
+        return "%s ORDER BY %s" % (
+            self.process(element.target, **kw),
+            self.process(element.order_by, **kw)
         )
 
     def visit_match_op_binary(self, binary, operator, **kw):

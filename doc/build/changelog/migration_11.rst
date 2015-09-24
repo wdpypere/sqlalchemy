@@ -16,7 +16,7 @@ What's New in SQLAlchemy 1.1?
     some issues may be moved to later milestones in order to allow
     for a timely release.
 
-    Document last updated: July 24, 2015.
+    Document last updated: September 19, 2015
 
 Introduction
 ============
@@ -66,6 +66,94 @@ as it relies on deprecated features of setuptools.
 New Features and Improvements - ORM
 ===================================
 
+.. _change_2677:
+
+New Session lifecycle events
+----------------------------
+
+The :class:`.Session` has long supported events that allow some degree
+of tracking of state changes to objects, including
+:meth:`.SessionEvents.before_attach`, :meth:`.SessionEvents.after_attach`,
+and :meth:`.SessionEvents.before_flush`.  The Session documentation also
+documents major object states at :ref:`session_object_states`.  However,
+there has never been system of tracking objects specifically as they
+pass through these transitions.  Additionally, the status of "deleted" objects
+has historically been murky as the objects act somewhere between
+the "persistent" and "detached" states.
+
+To clean up this area and allow the realm of session state transition
+to be fully transparent, a new series of events have been added that
+are intended to cover every possible way that an object might transition
+between states, and additionally the "deleted" status has been given
+its own official state name within the realm of session object states.
+
+New State Transition Events
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Transitions between all states of an object such as :term:`persistent`,
+:term:`pending` and others can now be intercepted in terms of a
+session-level event intended to cover a specific transition.
+Transitions as objects move into a :class:`.Session`, move out of a
+:class:`.Session`, and even all the transitions which occur when the
+transaction is rolled back using :meth:`.Session.rollback`
+are explicitly present in the interface of :class:`.SessionEvents`.
+
+In total, there are **ten new events**.  A summary of these events is in a
+newly written documentation section :ref:`session_lifecycle_events`.
+
+
+New Object State "deleted" is added, deleted objects no longer "persistent"
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :term:`persistent` state of an object in the :class:`.Session` has
+always been documented as an object that has a valid database identity;
+however in the case of objects that were deleted within a flush, they
+have always been in a grey area where they are not really "detached"
+from the :class:`.Session` yet, because they can still be restored
+within a rollback, but are not really "persistent" because their database
+identity has been deleted and they aren't present in the identity map.
+
+To resolve this grey area given the new events, a new object state
+:term:`deleted` is introduced.  This state exists between the "persistent" and
+"detached" states.  An object that is marked for deletion via
+:meth:`.Session.delete` remains in the "persistent" state until a flush
+proceeds; at that point, it is removed from the identity map, moves
+to the "deleted" state, and the :meth:`.SessionEvents.persistent_to_deleted`
+hook is invoked.  If the :class:`.Session` object's transaction is rolled
+back, the object is restored as persistent; the
+:meth:`.SessionEvents.deleted_to_persistent` transition is called.  Otherwise
+if the :class:`.Session` object's transaction is committed,
+the :meth:`.SessionEvents.deleted_to_detached` transition is invoked.
+
+Additionally, the :attr:`.InstanceState.persistent` accessor **no longer returns
+True** for an object that is in the new "deleted" state; instead, the
+:attr:`.InstanceState.deleted` accessor has been enhanced to reliably
+report on this new state.   When the object is detached, the :attr:`.InstanceState.deleted`
+returns False and the :attr:`.InstanceState.detached` accessor is True
+instead.  To determine if an object was deleted either in the current
+transaction or in a previous transaction, use the
+:attr:`.InstanceState.was_deleted` accessor.
+
+Strong Identity Map is Deprecated
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+One of the inspirations for the new series of transition events was to enable
+leak-proof tracking of objects as they move in and out of the identity map,
+so that a "strong reference" may be maintained mirroring the object
+moving in and out of this map.  With this new capability, there is no longer
+any need for the :paramref:`.Session.weak_identity_map` parameter and the
+corresponding :class:`.StrongIdentityMap` object.  This option has remained
+in SQLAlchemy for many years as the "strong-referencing" behavior used to be
+the only behavior available, and many applications were written to assume
+this behavior.   It has long been recommended that strong-reference tracking
+of objects not be an intrinsic job of the :class:`.Session` and instead
+be an application-level construct built as needed by the application; the
+new event model allows even the exact behavior of the strong identity map
+to be replicated.   See :ref:`session_referencing_behavior` for a new
+recipe illustrating how to replace the strong identity map.
+
+:ticket:`2677`
+
 .. _change_3499:
 
 Changes regarding "unhashable" types
@@ -103,6 +191,67 @@ as we would any ordinary mapped object.   This replaces the previous
 approach which applied a counter to the object.
 
 :ticket:`3499`
+
+.. _change_3321:
+
+Specific checks added for passing mapped classes, instances as SQL literals
+---------------------------------------------------------------------------
+
+The typing system now has specific checks for passing of SQLAlchemy
+"inspectable" objects in contexts where they would otherwise be handled as
+literal values.   Any SQLAlchemy built-in object that is legal to pass as a
+SQL value includes a method ``__clause_element__()`` which provides a
+valid SQL expression for that object.  For SQLAlchemy objects that
+don't provide this, such as mapped classes, mappers, and mapped
+instances, a more informative error message is emitted rather than
+allowing the DBAPI to receive the object and fail later.  An example
+is illustrated below, where a string-based attribute ``User.name`` is
+compared to a full instance of ``User()``, rather than against a
+string value::
+
+    >>> some_user = User()
+    >>> q = s.query(User).filter(User.name == some_user)
+    ...
+    sqlalchemy.exc.ArgumentError: Object <__main__.User object at 0x103167e90> is not legal as a SQL literal value
+
+The exception is now immediate when the comparison is made between
+``User.name == some_user``.  Previously, a comparison like the above
+would produce a SQL expression that would only fail once resolved
+into a DBAPI execution call; the mapped ``User`` object would
+ultimately become a bound parameter that would be rejected by the
+DBAPI.
+
+Note that in the above example, the expression fails because
+``User.name`` is a string-based (e.g. column oriented) attribute.
+The change does *not* impact the usual case of comparing a many-to-one
+relationship attribute to an object, which is handled distinctly::
+
+    >>> # Address.user refers to the User mapper, so
+    >>> # this is of course still OK!
+    >>> q = s.query(Address).filter(Address.user == some_user)
+
+
+:ticket:`3321`
+
+.. _change_3250:
+
+New options allowing explicit persistence of NULL over a default
+----------------------------------------------------------------
+
+Related to the new JSON-NULL support added to Postgresql as part of
+:ref:`change_3514`, the base :class:`.TypeEngine` class now supports
+a method :meth:`.TypeEngine.evaluates_none` which allows a positive set
+of the ``None`` value on an attribute to be persisted as NULL, rather than
+omitting the column from the INSERT statement, which has the effect of using
+the column-level default.  This allows a mapper-level
+configuration of the existing object-level technique of assigning
+:func:`.sql.null` to the attribute.
+
+.. seealso::
+
+    :ref:`session_forcing_null`
+
+:ticket:`3250`
 
 New Features and Improvements - Core
 ====================================
@@ -164,6 +313,251 @@ UNIONs with parenthesized SELECT statements is much less common than the
 "right-nested-join" use case of that feature.
 
 :ticket:`2528`
+
+.. _change_3516:
+
+Array support added to Core; new ANY and ALL operators
+------------------------------------------------------
+
+Along with the enhancements made to the Postgresql :class:`.ARRAY`
+type described in :ref:`change_3503`, the base class of :class:`.ARRAY`
+itself has been moved to Core in a new class :class:`.types.Array`.
+
+Arrays are part of the SQL standard, as are several array-oriented functions
+such as ``array_agg()`` and ``unnest()``.  In support of these constructs
+for not just PostgreSQL but also potentially for other array-capable backends
+in the future such as DB2, the majority of array logic for SQL expressions
+is now in Core.   The :class:`.Array` type still **only works on
+Postgresql**, however it can be used directly, supporting special array
+use cases such as indexed access, as well as support for the ANY and ALL::
+
+    mytable = Table("mytable", metadata,
+            Column("data", Array(Integer, dimensions=2))
+        )
+
+    expr = mytable.c.data[5][6]
+
+    expr = mytable.c.data[5].any(12)
+
+In support of ANY and ALL, the :class:`.Array` type retains the same
+:meth:`.Array.Comparator.any` and :meth:`.Array.Comparator.all` methods
+from the PostgreSQL type, but also exports these operations to new
+standalone operator functions :func:`.sql.expression.any_` and
+:func:`.sql.expression.all_`.  These two functions work in more
+of the traditional SQL way, allowing a right-side expression form such
+as::
+
+    from sqlalchemy import any_, all_
+
+    select([mytable]).where(12 == any_(mytable.c.data[5]))
+
+For the PostgreSQL-specific operators "contains", "contained_by", and
+"overlaps", one should continue to use the :class:`.postgresql.ARRAY`
+type directly, which provides all functionality of the :class:`.Array`
+type as well.
+
+The :func:`.sql.expression.any_` and :func:`.sql.expression.all_` operators
+are open-ended at the Core level, however their interpretation by backend
+databases is limited.  On the Postgresql backend, the two operators
+**only accept array values**.  Whereas on the MySQL backend, they
+**only accept subquery values**.  On MySQL, one can use an expression
+such as::
+
+    from sqlalchemy import any_, all_
+
+    subq = select([mytable.c.value])
+    select([mytable]).where(12 > any_(subq))
+
+
+:ticket:`3516`
+
+.. _change_3132:
+
+New Function features, "WITHIN GROUP", array_agg and set aggregate functions
+----------------------------------------------------------------------------
+
+With the new :class:`.Array` type we can also implement a pre-typed
+function for the ``array_agg()`` SQL function that returns an array,
+which is now available using :class:`.array_agg`::
+
+    from sqlalchemy import func
+    stmt = select([func.array_agg(table.c.value)])
+
+A Postgresql element for an aggregate ORDER BY is also added via
+:class:`.postgresql.aggregate_order_by`::
+
+    from sqlalchemy.dialects.postgresql import aggregate_order_by
+    expr = func.array_agg(aggregate_order_by(table.c.a, table.c.b.desc()))
+    stmt = select([expr])
+
+Producing::
+
+    SELECT array_agg(table1.a ORDER BY table1.b DESC) AS array_agg_1 FROM table1
+
+The PG dialect itself also provides an :func:`.postgresql.array_agg` wrapper to
+ensure the :class:`.postgresql.ARRAY` type::
+
+    from sqlalchemy.dialects.postgresql import array_agg
+    stmt = select([array_agg(table.c.value).contains('foo')])
+
+
+Additionally, functions like ``percentile_cont()``, ``percentile_disc()``,
+``rank()``, ``dense_rank()`` and others that require an ordering via
+``WITHIN GROUP (ORDER BY <expr>)`` are now available via the
+:meth:`.FunctionElement.within_group` modifier::
+
+    from sqlalchemy import func
+    stmt = select([
+        department.c.id,
+        func.percentile_cont(0.5).within_group(
+            department.c.salary.desc()
+        )
+    ])
+
+The above statement would produce SQL similar to::
+
+  SELECT department.id, percentile_cont(0.5)
+  WITHIN GROUP (ORDER BY department.salary DESC)
+
+Placeholders with correct return types are now provided for these functions,
+and include :class:`.percentile_cont`, :class:`.percentile_disc`,
+:class:`.rank`, :class:`.dense_rank`, :class:`.mode`, :class:`.percent_rank`,
+and :class:`.cume_dist`.
+
+:ticket:`3132` :ticket:`1370`
+
+.. _change_2919:
+
+TypeDecorator now works with Enum, Boolean, "schema" types automatically
+------------------------------------------------------------------------
+
+The :class:`.SchemaType` types include types such as :class:`.Enum`
+and :class:`.Boolean` which, in addition to corresponding to a database
+type, also generate either a CHECK constraint or in the case of Postgresql
+ENUM a new CREATE TYPE statement, will now work automatically with
+:class:`.TypeDecorator` recipes.  Previously, a :class:`.TypeDecorator` for
+an :class:`.postgresql.ENUM` had to look like this::
+
+    # old way
+    class MyEnum(TypeDecorator, SchemaType):
+        impl = postgresql.ENUM('one', 'two', 'three', name='myenum')
+
+        def _set_table(self, table):
+            self.impl._set_table(table)
+
+The :class:`.TypeDecorator` now propagates those additional events so it
+can be done like any other type::
+
+    # new way
+    class MyEnum(TypeDecorator):
+        impl = postgresql.ENUM('one', 'two', 'three', name='myenum')
+
+
+:ticket:`2919`
+
+.. _change_3531:
+
+The type_coerce function is now a persistent SQL element
+--------------------------------------------------------
+
+The :func:`.expression.type_coerce` function previously would return
+an object either of type :class:`.BindParameter` or :class:`.Label`, depending
+on the input.  An effect this would have was that in the case where expression
+transformations were used, such as the conversion of an element from a
+:class:`.Column` to a :class:`.BindParameter` that's critical to ORM-level
+lazy loading, the type coercion information would not be used since it would
+have been lost already.
+
+To improve this behavior, the function now returns a persistent
+:class:`.TypeCoerce` container around the given expression, which itself
+remains unaffected; this construct is evaluated explicitly by the
+SQL compiler.  This allows for the coercion of the inner expression
+to be maintained no matter how the statement is modified, including if
+the contained element is replaced with a different one, as is common
+within the ORM's lazy loading feature.
+
+The test case illustrating the effect makes use of a heterogeneous
+primaryjoin condition in conjunction with custom types and lazy loading.
+Given a custom type that applies a CAST as a "bind expression"::
+
+    class StringAsInt(TypeDecorator):
+        impl = String
+
+        def column_expression(self, col):
+            return cast(col, Integer)
+
+        def bind_expression(self, value):
+            return cast(value, String)
+
+Then, a mapping where we are equating a string "id" column on one
+table to an integer "id" column on the other::
+
+    class Person(Base):
+        __tablename__ = 'person'
+        id = Column(StringAsInt, primary_key=True)
+
+        pets = relationship(
+            'Pets',
+            primaryjoin=(
+                'foreign(Pets.person_id)'
+                '==cast(type_coerce(Person.id, Integer), Integer)'
+            )
+        )
+
+    class Pets(Base):
+        __tablename__ = 'pets'
+        id = Column('id', Integer, primary_key=True)
+        person_id = Column('person_id', Integer)
+
+Above, in the :paramref:`.relationship.primaryjoin` expression, we are
+using :func:`.type_coerce` to handle bound parameters passed via
+lazyloading as integers, since we already know these will come from
+our ``StringAsInt`` type which maintains the value as an integer in
+Python. We are then using :func:`.cast` so that as a SQL expression,
+the VARCHAR "id"  column will be CAST to an integer for a regular non-
+converted join as with :meth:`.Query.join` or :func:`.orm.joinedload`.
+That is, a joinedload of ``.pets`` looks like::
+
+    SELECT person.id AS person_id, pets_1.id AS pets_1_id,
+           pets_1.person_id AS pets_1_person_id
+    FROM person
+    LEFT OUTER JOIN pets AS pets_1
+    ON pets_1.person_id = CAST(person.id AS INTEGER)
+
+Without the CAST in the ON clause of the join, strongly-typed databases
+such as Postgresql will refuse to implicitly compare the integer and fail.
+
+The lazyload case of ``.pets`` relies upon replacing
+the ``Person.id`` column at load time with a bound parameter, which receives
+a Python-loaded value.  This replacement is specifically where the intent
+of our :func:`.type_coerce` function would be lost.  Prior to the change,
+this lazy load comes out as::
+
+    SELECT pets.id AS pets_id, pets.person_id AS pets_person_id
+    FROM pets
+    WHERE pets.person_id = CAST(CAST(%(param_1)s AS VARCHAR) AS INTEGER)
+    {'param_1': 5}
+
+Where above, we see that our in-Python value of ``5`` is CAST first
+to a VARCHAR, then back to an INTEGER in SQL; a double CAST which works,
+but is nevertheless not what we asked for.
+
+With the change, the :func:`.type_coerce` function maintains a wrapper
+even after the column is swapped out for a bound parameter, and the query now
+looks like::
+
+    SELECT pets.id AS pets_id, pets.person_id AS pets_person_id
+    FROM pets
+    WHERE pets.person_id = CAST(%(param_1)s AS INTEGER)
+    {'param_1': 5}
+
+Where our outer CAST that's in our primaryjoin still takes effect, but the
+needless CAST that's in part of the ``StringAsInt`` custom type is removed
+as intended by the :func:`.type_coerce` function.
+
+
+:ticket:`3531`
+
 
 Key Behavioral Changes - ORM
 ============================
@@ -297,7 +691,8 @@ method were used, ``None`` would be ignored in all cases::
         MyObject,
         [{"json_value": None}])  # would insert SQL NULL and/or trigger defaults
 
-The :class:`.JSON` type now adds a new flag :attr:`.TypeEngine.evaluates_none`
+The :class:`.JSON` type now implements the
+:attr:`.TypeEngine.should_evaluate_none` flag,
 indicating that ``None`` should not be ignored here; it is configured
 automatically based on the value of :paramref:`.JSON.none_as_null`.
 Thanks to :ticket:`3061`, we can differentiate when the value ``None`` is actively
@@ -319,7 +714,9 @@ previously.  Below, the two variants are illustrated::
 
 .. seealso::
 
-  :ref:`change_3514_jsonnull`
+      :ref:`change_3250`
+
+      :ref:`change_3514_jsonnull`
 
 .. _change_3514_jsonnull:
 
@@ -348,6 +745,44 @@ to::
     :ref:`change_3514`
 
 :ticket:`3514`
+
+.. _change_2729:
+
+ARRAY with ENUM will now emit CREATE TYPE for the ENUM
+------------------------------------------------------
+
+A table definition like the following will now emit CREATE TYPE
+as expected::
+
+    enum = Enum(
+        'manager', 'place_admin', 'carwash_admin',
+        'parking_admin', 'service_admin', 'tire_admin',
+        'mechanic', 'carwasher', 'tire_mechanic', name="work_place_roles")
+
+    class WorkPlacement(Base):
+        __tablename__ = 'work_placement'
+        id = Column(Integer, primary_key=True)
+        roles = Column(ARRAY(enum))
+
+
+    e = create_engine("postgresql://scott:tiger@localhost/test", echo=True)
+    Base.metadata.create_all(e)
+
+emits::
+
+    CREATE TYPE work_place_roles AS ENUM (
+        'manager', 'place_admin', 'carwash_admin', 'parking_admin',
+        'service_admin', 'tire_admin', 'mechanic', 'carwasher',
+        'tire_mechanic')
+
+    CREATE TABLE work_placement (
+        id SERIAL NOT NULL,
+        roles work_place_roles[],
+        PRIMARY KEY (id)
+    )
+
+
+:ticket:`2729`
 
 Dialect Improvements and Changes - MySQL
 =============================================
@@ -395,6 +830,42 @@ value to the string "max" should consider the value of ``None`` to mean
 the same thing.
 
 :ticket:`3504`
+
+.. _change_3434:
+
+The legacy_schema_aliasing flag is now set to False
+---------------------------------------------------
+
+SQLAlchemy 1.0.5 introduced the ``legacy_schema_aliasing`` flag to the
+MSSQL dialect, allowing so-called "legacy mode" aliasing to be turned off.
+This aliasing attempts to turn schema-qualified tables into aliases;
+given a table such as::
+
+    account_table = Table(
+        'account', metadata,
+        Column('id', Integer, primary_key=True),
+        Column('info', String(100)),
+        schema="customer_schema"
+    )
+
+The legacy mode of behavior will attempt to turn a schema-qualified table
+name into an alias::
+
+    >>> eng = create_engine("mssql+pymssql://mydsn", legacy_schema_aliasing=True)
+    >>> print(account_table.select().compile(eng))
+    SELECT account_1.id, account_1.info
+    FROM customer_schema.account AS account_1
+
+However, this aliasing has been shown to be unnecessary and in many cases
+produces incorrect SQL.
+
+In SQLAlchemy 1.1, the ``legacy_schema_aliasing`` flag now defaults to
+False, disabling this mode of behavior and allowing the MSSQL dialect to behave
+normally with schema-qualified tables.  For applications which may rely
+on this behavior, set the flag back to True.
+
+
+:ticket:`3434`
 
 Dialect Improvements and Changes - Oracle
 =============================================
