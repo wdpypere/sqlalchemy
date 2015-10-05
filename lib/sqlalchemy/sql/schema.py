@@ -3041,10 +3041,10 @@ class PrimaryKeyConstraint(ColumnCollectionConstraint):
                     type_api.INTEGERTYPE._type_affinity):
                 if raise_:
                     raise exc.ArgumentError(
-                        "Column type %s on column %s.%s is not "
+                        "Column type %s on column '%s' is not "
                         "compatible with autoincrement=True" % (
                             col.type,
-                            col.table.fullname, col.name
+                            col
                         ))
                 else:
                     return False
