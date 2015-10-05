@@ -795,10 +795,16 @@ Here's a rundown of some of the most common operators used in
     # or chain multiple filter()/filter_by() calls
     query.filter(User.name == 'ed').filter(User.fullname == 'Ed Jones')
 
+ .. note::  Make sure you use :func:`.and_` and **not** the
+    Python ``and`` operator!
+
 * :func:`OR <.sql.expression.or_>`::
 
     from sqlalchemy import or_
     query.filter(or_(User.name == 'ed', User.name == 'wendy'))
+
+ .. note::  Make sure you use :func:`.or_` and **not** the
+    Python ``or`` operator!
 
 * :meth:`MATCH <.ColumnOperators.match>`::
 
@@ -1349,6 +1355,16 @@ As you would expect, the same idea is used for "outer" joins, using the
 The reference documentation for :meth:`~.Query.join` contains detailed information
 and examples of the calling styles accepted by this method; :meth:`~.Query.join`
 is an important method at the center of usage for any SQL-fluent application.
+
+.. topic:: What does :class:`.Query` select from if there's multiple entities?
+
+    The :meth:`.Query.join` method will **typically join from the leftmost
+    item** in the list of entities, when the ON clause is omitted, or if the
+    ON clause is a plain SQL expression.  To control the first entity in the list
+    of JOINs, use the :meth:`.Query.select_from` method::
+
+        query = Session.query(User, Address).select_from(Address).join(User)
+
 
 .. _ormtutorial_aliases:
 
