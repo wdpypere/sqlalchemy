@@ -212,9 +212,7 @@ def _scan_cols(
 
     for c in cols:
         col_key = _getattr_col_key(c)
-        #if col_key == "id":
-        #    import pdb
-        #    pdb.set_trace()
+
         if col_key in parameters and col_key not in check_columns:
 
             _append_param_parameter(
@@ -230,7 +228,6 @@ def _scan_cols(
                         c is not stmt.table._autoincrement_column
                     ):
 
-                # MARKMARK
                 if implicit_returning:
                     _append_param_insert_pk_returning(
                         compiler, stmt, c, values, kw)

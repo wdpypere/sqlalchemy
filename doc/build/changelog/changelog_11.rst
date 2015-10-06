@@ -22,6 +22,31 @@
     :version: 1.1.0b1
 
     .. change::
+        :tags: change, sql, mysql
+        :tickets: 3216
+
+        The system by which a :class:`.Column` considers itself to be an
+        "auto increment" column has been changed, such that autoincrement
+        is no longer implicitly enabled for a :class:`.Table` that has a
+        composite primary key.  In order to accommodate being able to enable
+        autoincrement for a composite PK member column while at the same time
+        maintaining SQLAlchemy's long standing behavior of enabling
+        implicit autoincrement for a single integer primary key, a third
+        state has been added to the :paramref:`.Column.autoincrement` parameter
+        ``"auto"``, which is now the default.  Additionally, the PRIMARY KEY
+        constraint generated for a table will now always place the autoincrement
+        column first, which in particular removes the need for an extra
+        "KEY" directive that was needed by MySQL.
+
+        .. seealso::
+
+            :ref:`change_3216`
+
+        :paramref:`.Column.autoincrement` parameter has been changed to
+        now feature three distinct states, False, True and ``'auto'``, the
+        default being ``'auto'``.
+
+    .. change::
         :tags: change, sqlite
         :pullreq: github:198
 

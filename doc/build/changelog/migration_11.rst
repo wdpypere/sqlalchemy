@@ -256,6 +256,59 @@ configuration of the existing object-level technique of assigning
 New Features and Improvements - Core
 ====================================
 
+.. _change_3216:
+
+The ``.autoincrement`` directive no longer implicitly enables for a composite primary key column
+-------------------------------------------------------------------------------------------------
+
+SQLAlchemy has always had the convenience feature of enabling the backend database's
+"autoincrement" feature for a single-column integer primary key; by "autoincrement"
+we mean that the back-end database column will be SERIAL on the Postgresql backend
+or AUTO_INCREMENT on the MySQL backend, and additionally that the :meth:`.Table.insert`
+construct will be aware that some form of autoincrement is present and provide for
+this automatically generated value to be available after the INSERT proceeds.
+
+What's changed is that this feature no longer turns on automatically for a
+*composite* primary key; previously, a table definition such as::
+
+    Table(
+        'some_table', metadata,
+        Column('x', Integer, primary_key=True),
+        Column('y', Integer, primary_key=True)
+    )
+
+Would have "autoincrement" semantics applied to the ``'x'`` column, only
+because it's first in the list of primary key columns.  In order to
+disable this, one would have to turn off ``autoincrement`` on all columns::
+
+    # old way
+    Table(
+        'some_table', metadata,
+        Column('x', Integer, primary_key=True, autoincrement=False),
+        Column('y', Integer, primary_key=True, autoincrement=False)
+    )
+
+With the new behavior, the composite primary key will not have autoincrement
+semantics unless a column is marked explcitly with ``autoincrement=True``::
+
+    # column 'y' will be SERIAL/AUTO_INCREMENT/ auto-generating
+    Table(
+        'some_table', metadata,
+        Column('x', Integer, primary_key=True),
+        Column('y', Integer, primary_key=True, autoincrement=True)
+    )
+
+In order to anticipate some potential backwards-incompatible scenarios,
+the :meth:`.Table.insert` construct will perform more thorough checks
+for missing primary key values on composite primary key columns that don't
+have autoincrement set up.
+
+
+.. seealso::
+
+    :ref:`change_mysql_3216`
+
+:ticket:`3216`
 
 .. _change_2528:
 
@@ -786,6 +839,57 @@ emits::
 
 Dialect Improvements and Changes - MySQL
 =============================================
+
+.. _change_mysql_3216:
+
+No more generation of an implicit KEY for composite primary key w/ AUTO_INCREMENT
+---------------------------------------------------------------------------------
+
+The MySQL dialect had the behavior such that if a composite primary key
+on an InnoDB table featured AUTO_INCREMENT on one of its columns which was
+not the first column, e.g.::
+
+    t = Table(
+        'some_table', metadata,
+        Column('x', Integer, primary_key=True, autoincrement=False),
+        Column('y', Integer, primary_key=True, autoincrement=True),
+        mysql_engine='InnoDB'
+    )
+
+DDL such as the following would be generated::
+
+    CREATE TABLE some_table (
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL AUTO_INCREMENT,
+        PRIMARY KEY (x, y),
+        KEY idx_autoinc_y (y)
+    )ENGINE=InnoDB
+
+Note the above "KEY" with an auto-generated name; this is a change that
+found its way into the dialect many years ago in response to the issue that
+the AUTO_INCREMENT would otherwise fail on InnoDB without this additional KEY.
+
+This workaround has been removed and replaced with the much better system
+of just stating the AUTO_INCREMENT column *first* within the primary key::
+
+    CREATE TABLE some_table (
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL AUTO_INCREMENT,
+        PRIMARY KEY (y, x)
+    )ENGINE=InnoDB
+
+Along with the change :ref:`change_3216`, composite primary keys with
+or without auto increment are now easier to specify; ``autoincrement``
+now defaults to the value ``"auto"`` and the ``autoincrement=False``
+directives are no longer needed::
+
+    t = Table(
+        'some_table', metadata,
+        Column('x', Integer, primary_key=True),
+        Column('y', Integer, primary_key=True, autoincrement=True),
+        mysql_engine='InnoDB'
+    )
+
 
 
 Dialect Improvements and Changes - SQLite

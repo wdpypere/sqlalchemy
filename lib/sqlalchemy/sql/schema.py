@@ -904,17 +904,26 @@ class Column(SchemaItem, ColumnClause):
           argument is available such as ``server_default``, ``default``
           and ``unique``.
 
-        :param autoincrement: This flag may be set to ``False`` to
-          indicate an integer primary key column that should not be
-          considered to be the "autoincrement" column, that is
-          the integer primary key column which generates values
-          implicitly upon INSERT and whose value is usually returned
-          via the DBAPI cursor.lastrowid attribute.   It defaults
-          to ``True`` to satisfy the common use case of a table
-          with a single integer primary key column.  If the table
-          has a composite primary key consisting of more than one
-          integer column, set this flag to True only on the
-          column that should be considered "autoincrement".
+        :param autoincrement: Set up "auto increment" semantics for an integer
+          primary key column.  The default value is the string value ``auto``
+          which indicates that a single-column primary key that is of
+          an INTEGER type should receive auto increment semantics.  This
+          includes that back end DDL such as Postgresql SERIAL or MySQL
+          AUTO_INCREMENT will be emitted for this column during a table
+          create, as well as that the column is assumed to generate new
+          integer primary key values when an INSERT statement invokes which
+          will be retrieved by the dialect.
+
+          The flag may be set to ``True`` to indicate that a column which
+          is part of a composite (e.g. multi-column) primary key should
+          have autoincrement semantics, though note that only one column
+          within a primary key may have this setting.   It can also be
+          set to ``False`` on a single-column primary key that has a
+          datatype of INTEGER, but auto increment semantics are not desired.
+
+          .. versionchanged:: 1.1 The autoincrement flag now defaults to
+             ``"auto"`` which indicates autoincrement semantics by default
+             for single-column integer primary keys only, not composite.
 
           The setting *only* has an effect for columns which are:
 
@@ -960,12 +969,6 @@ class Column(SchemaItem, ColumnClause):
             to generate primary key identifiers (i.e. Firebird, Postgresql,
             Oracle).
 
-          .. versionchanged:: 0.7.4
-              ``autoincrement`` accepts a special value ``'ignore_fk'``
-              to indicate that autoincrementing status regardless of foreign
-              key references.  This applies to certain composite foreign key
-              setups, such as the one demonstrated in the ORM documentation
-              at :ref:`post_update`.
 
         :param default: A scalar, Python callable, or
             :class:`.ColumnElement` expression representing the
