@@ -433,6 +433,17 @@ class InsertTest(_InsertTestBase, fixtures.TablesTest, AssertsCompiledSQL):
 
         )
 
+    def test_anticipate_nullable_composite_pk(self):
+        t = Table(
+            't', MetaData(), Column('x', Integer, primary_key=True),
+            Column('y', Integer, primary_key=True, nullable=True)
+        )
+        self.assert_compile(
+            t.insert(),
+            "INSERT INTO t (x) VALUES (:x)",
+            params={'x': 5},
+        )
+
     def test_anticipate_no_pk_non_composite_pk(self):
         t = Table(
             't', MetaData(),

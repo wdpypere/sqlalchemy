@@ -249,7 +249,9 @@ def _scan_cols(
             elif implicit_return_defaults and \
                     c in implicit_return_defaults:
                 compiler.returning.append(c)
-            elif c.primary_key and c is not stmt.table._autoincrement_column:
+            elif c.primary_key and \
+                    c is not stmt.table._autoincrement_column and \
+                    not c.nullable:
                 _raise_pk_with_no_anticipated_value(c)
 
         elif compiler.isupdate:
@@ -324,7 +326,7 @@ def _append_param_insert_pk_returning(compiler, stmt, c, values, kw):
             )
     elif c is stmt.table._autoincrement_column or c.server_default is not None:
         compiler.returning.append(c)
-    else:
+    elif not c.nullable:
         # no .default, no .server_default, not autoincrement, we have
         # no indication this primary key column will have any value
         _raise_pk_with_no_anticipated_value(c)
@@ -400,7 +402,7 @@ def _append_param_insert_pk(compiler, stmt, c, values, kw):
         values.append(
             (c, _create_prefetch_bind_param(compiler, c))
         )
-    elif c.default is None and c.server_default is None:
+    elif c.default is None and c.server_default is None and not c.nullable:
         # no .default, no .server_default, not autoincrement, we have
         # no indication this primary key column will have any value
         _raise_pk_with_no_anticipated_value(c)
@@ -612,9 +614,9 @@ def _raise_pk_with_no_anticipated_value(c):
         "Column '%s.%s' is marked as a member of the "
         "primary key for table '%s', "
         "but has no Python-side or server-side default generator indicated, "
-        "nor does it indicate 'autoincrement=True', "
+        "nor does it indicate 'autoincrement=True' or 'nullable=True', "
         "and no explicit value is passed.  "
-        "Primary key columns may not store NULL."
+        "Primary key columns typically may not store NULL."
         %
         (c.table.fullname, c.name, c.table.fullname))
     if len(c.table.primary_key.columns) > 1:

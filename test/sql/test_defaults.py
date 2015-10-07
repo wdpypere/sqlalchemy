@@ -732,7 +732,6 @@ class AutoIncrementTest(fixtures.TablesTest):
         )
         assert x._autoincrement_column is None
 
-    @testing.fails_on('sqlite', 'FIXME: unknown')
     def test_non_autoincrement(self):
         # sqlite INT primary keys can be non-unique! (only for ints)
         nonai = Table(

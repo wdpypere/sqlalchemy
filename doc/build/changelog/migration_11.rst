@@ -333,6 +333,16 @@ value generator can be indicated using :class:`.FetchedValue`::
         Column('y', Integer, primary_key=True, server_default=FetchedValue())
     )
 
+For the very unlikely case where a composite primary key is actually intended
+to store NULL in one or more of its columns (only supported on SQLite and MySQL),
+specify the column with ``nullable=True``::
+
+    Table(
+        'b', metadata,
+        Column('x', Integer, primary_key=True),
+        Column('y', Integer, primary_key=True, nullable=True)
+    )
+
 
 
 .. seealso::
