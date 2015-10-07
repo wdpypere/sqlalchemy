@@ -751,7 +751,17 @@ class SQLTest(fixtures.TestBase, AssertsCompiledSQL):
                             "WHERE data > 'a' AND data < 'b''s'",
                             dialect=sqlite.dialect())
 
-
+    def test_no_autoinc_on_composite_pk(self):
+        m = MetaData()
+        t = Table(
+            't', m,
+            Column('x', Integer, primary_key=True, autoincrement=True),
+            Column('y', Integer, primary_key=True))
+        assert_raises_message(
+            exc.CompileError,
+            "SQLite does not support autoincrement for composite",
+            CreateTable(t).compile, dialect=sqlite.dialect()
+        )
 
 class InsertTest(fixtures.TestBase, AssertsExecutionResults):
 
@@ -782,7 +792,7 @@ class InsertTest(fixtures.TestBase, AssertsExecutionResults):
     @testing.exclude('sqlite', '<', (3, 3, 8), 'no database support')
     def test_empty_insert_pk2(self):
         assert_raises(
-            exc.DBAPIError, self._test_empty_insert,
+            exc.CompileError, self._test_empty_insert,
             Table(
                 'b', MetaData(testing.db),
                 Column('x', Integer, primary_key=True),
@@ -791,7 +801,7 @@ class InsertTest(fixtures.TestBase, AssertsExecutionResults):
     @testing.exclude('sqlite', '<', (3, 3, 8), 'no database support')
     def test_empty_insert_pk3(self):
         assert_raises(
-            exc.DBAPIError, self._test_empty_insert,
+            exc.CompileError, self._test_empty_insert,
             Table(
                 'c', MetaData(testing.db),
                 Column('x', Integer, primary_key=True),
