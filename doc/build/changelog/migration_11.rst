@@ -303,7 +303,36 @@ semantics unless a column is marked explcitly with ``autoincrement=True``::
 In order to anticipate some potential backwards-incompatible scenarios,
 the :meth:`.Table.insert` construct will perform more thorough checks
 for missing primary key values on composite primary key columns that don't
-have autoincrement set up.
+have autoincrement set up; given a table such as::
+
+    Table(
+        'b', metadata,
+        Column('x', Integer, primary_key=True),
+        Column('y', Integer, primary_key=True)
+    )
+
+An INSERT emitted with no values for this table will produce the exception::
+
+    CompileError: Column 'b.x' is marked as a member of the primary
+    key for table 'b', but has no Python-side or server-side default
+    generator indicated, nor does it indicate 'autoincrement=True',
+    and no explicit value is passed.  Primary key columns may not
+    store NULL. Note that as of SQLAlchemy 1.1, 'autoincrement=True'
+    must be indicated explicitly for composite (e.g. multicolumn)
+    primary keys if AUTO_INCREMENT/SERIAL/IDENTITY behavior is
+    expected for one of the columns in the primary key. CREATE TABLE
+    statements are impacted by this change as well on most backends.
+
+For a column that is receiving primary key values from a server-side
+default or something less common such as a trigger, the presence of a
+value generator can be indicated using :class:`.FetchedValue`::
+
+    Table(
+        'b', metadata,
+        Column('x', Integer, primary_key=True, server_default=FetchedValue()),
+        Column('y', Integer, primary_key=True, server_default=FetchedValue())
+    )
+
 
 
 .. seealso::
