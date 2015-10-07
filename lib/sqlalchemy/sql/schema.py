@@ -905,10 +905,11 @@ class Column(SchemaItem, ColumnClause):
           and ``unique``.
 
         :param autoincrement: Set up "auto increment" semantics for an integer
-          primary key column.  The default value is the string value ``auto``
+          primary key column.  The default value is the string ``"auto"``
           which indicates that a single-column primary key that is of
-          an INTEGER type should receive auto increment semantics.  This
-          includes that back end DDL such as Postgresql SERIAL or MySQL
+          an INTEGER type should receive auto increment semantics automatically;
+          all other varieties of primary key columns will not.  This
+          includes that :term:`DDL` such as Postgresql SERIAL or MySQL
           AUTO_INCREMENT will be emitted for this column during a table
           create, as well as that the column is assumed to generate new
           integer primary key values when an INSERT statement invokes which
@@ -919,11 +920,15 @@ class Column(SchemaItem, ColumnClause):
           have autoincrement semantics, though note that only one column
           within a primary key may have this setting.   It can also be
           set to ``False`` on a single-column primary key that has a
-          datatype of INTEGER, but auto increment semantics are not desired.
+          datatype of INTEGER in order to disable auto increment semantics
+          for that column.
 
           .. versionchanged:: 1.1 The autoincrement flag now defaults to
              ``"auto"`` which indicates autoincrement semantics by default
-             for single-column integer primary keys only, not composite.
+             for single-column integer primary keys only; for composite
+             (multi-column) primary keys, autoincrement is never implicitly
+             enabled; as always, ``autoincrement=True`` will allow for
+             at most one of those columns to be an "autoincrement" column.
 
           The setting *only* has an effect for columns which are:
 
@@ -940,8 +945,8 @@ class Column(SchemaItem, ColumnClause):
                             primary_key=True, autoincrement='ignore_fk')
 
             It is typically not desirable to have "autoincrement" enabled
-            on such a column as its value intends to mirror that of a
-            primary key column elsewhere.
+            on a column that refers to another via foreign key, as such a column
+            is required to refer to a value that originates from elsewhere.
 
           * have no server side or client side defaults (with the exception
             of Postgresql SERIAL).

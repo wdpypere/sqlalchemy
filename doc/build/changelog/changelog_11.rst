@@ -33,18 +33,30 @@
         maintaining SQLAlchemy's long standing behavior of enabling
         implicit autoincrement for a single integer primary key, a third
         state has been added to the :paramref:`.Column.autoincrement` parameter
-        ``"auto"``, which is now the default.  Additionally, the PRIMARY KEY
-        constraint generated for a table will now always place the autoincrement
-        column first, which in particular removes the need for an extra
-        "KEY" directive that was needed by MySQL.
+        ``"auto"``, which is now the default.
 
         .. seealso::
 
             :ref:`change_3216`
 
-        :paramref:`.Column.autoincrement` parameter has been changed to
-        now feature three distinct states, False, True and ``'auto'``, the
-        default being ``'auto'``.
+            :ref:`change_mysql_3216`
+
+    .. change::
+        :tags: change, mysql
+        :tickets: 3216
+
+        The MySQL dialect no longer generates an extra "KEY" directive when
+        generating CREATE TABLE DDL for a table using InnoDB with a
+        composite primary key with AUTO_INCREMENT on a column that isn't the
+        first column;  to overcome InnoDB's limitation here, the PRIMARY KEY
+        constraint is now generated with the AUTO_INCREMENT column placed
+        first in the list of columns.
+
+        .. seealso::
+
+            :ref:`change_mysql_3216`
+
+            :ref:`change_3216`
 
     .. change::
         :tags: change, sqlite

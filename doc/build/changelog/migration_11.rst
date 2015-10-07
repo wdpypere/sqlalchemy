@@ -258,15 +258,17 @@ New Features and Improvements - Core
 
 .. _change_3216:
 
-The ``.autoincrement`` directive no longer implicitly enables for a composite primary key column
--------------------------------------------------------------------------------------------------
+The ``.autoincrement`` directive is no longer implicitly enabled for a composite primary key column
+---------------------------------------------------------------------------------------------------
 
 SQLAlchemy has always had the convenience feature of enabling the backend database's
 "autoincrement" feature for a single-column integer primary key; by "autoincrement"
-we mean that the back-end database column will be SERIAL on the Postgresql backend
-or AUTO_INCREMENT on the MySQL backend, and additionally that the :meth:`.Table.insert`
-construct will be aware that some form of autoincrement is present and provide for
-this automatically generated value to be available after the INSERT proceeds.
+we mean that the database column will include whatever DDL directives the
+database provides in order to indicate an auto-incrementing integer identifier,
+such as the SERIAL keyword on Postgresql or AUTO_INCREMENT on MySQL, and additionally
+that the dialect will recieve these generated values from the execution
+of a :meth:`.Table.insert` construct using techniques appropriate to that
+backend.
 
 What's changed is that this feature no longer turns on automatically for a
 *composite* primary key; previously, a table definition such as::
@@ -879,7 +881,8 @@ of just stating the AUTO_INCREMENT column *first* within the primary key::
     )ENGINE=InnoDB
 
 Along with the change :ref:`change_3216`, composite primary keys with
-or without auto increment are now easier to specify; ``autoincrement``
+or without auto increment are now easier to specify;
+:paramref:`.Column.autoincrement`
 now defaults to the value ``"auto"`` and the ``autoincrement=False``
 directives are no longer needed::
 
