@@ -78,9 +78,6 @@ class InsertTest(fixtures.TestBase, AssertsExecutionResults):
                 eng.execute, t2.insert()
             )
 
-            #assert_raises_message(exc.DBAPIError,
-            #                      'violates not-null constraint',
-            #                      eng.execute, t2.insert())
 
     def test_sequence_insert(self):
         table = Table(
