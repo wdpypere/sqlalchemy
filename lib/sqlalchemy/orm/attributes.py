@@ -855,7 +855,7 @@ class CollectionAttributeImpl(AttributeImpl):
 
     __slots__ = (
         'copy', 'collection_factory', '_append_token', '_remove_token',
-        '_duck_typed_as'
+        '_duck_typed_as', '_dictlike'
     )
 
     def __init__(self, class_, key, callable_, dispatch,
@@ -878,6 +878,7 @@ class CollectionAttributeImpl(AttributeImpl):
         self._remove_token = None
         self._duck_typed_as = util.duck_type_collection(
             self.collection_factory())
+        self._dictlike = self._duck_typed_as is dict
 
         if getattr(self.collection_factory, "_sa_linker", None):
 
@@ -1025,12 +1026,15 @@ class CollectionAttributeImpl(AttributeImpl):
             passive=PASSIVE_OFF, pop=False, _adapt=True):
         iterable = orig_iterable = value
 
+        dictlike = self._dictlike
+
         # pulling a new collection first so that an adaptation exception does
         # not trigger a lazy load of the old collection.
         new_collection, user_data = self._initialize_collection(state)
         if _adapt:
             if new_collection._converter is not None:
                 iterable = new_collection._converter(iterable)
+                dictlike = False
             else:
                 setting_type = util.duck_type_collection(iterable)
                 receiving_type = self._duck_typed_as
@@ -1047,15 +1051,20 @@ class CollectionAttributeImpl(AttributeImpl):
                 # adapter.
                 if hasattr(iterable, '_sa_iterator'):
                     iterable = iterable._sa_iterator()
+                    dictlike = False
                 elif setting_type is dict:
-                    if util.py3k:
-                        iterable = iterable.values()
+                    if dictlike:
+                        iterable = iterable.items()
                     else:
-                        iterable = getattr(
-                            iterable, 'itervalues', iterable.values)()
+                        iterable = iterable.values()
                 else:
+                    assert not dictlike
                     iterable = iter(iterable)
-        new_values = list(iterable)
+
+        if dictlike:
+            new_values = dict(iterable)
+        else:
+            new_values = list(iterable)
 
         old = self.get(state, dict_, passive=PASSIVE_ONLY_PERSISTENT)
         if old is PASSIVE_NO_RESULT:
@@ -1072,8 +1081,12 @@ class CollectionAttributeImpl(AttributeImpl):
 
         dict_[self.key] = user_data
 
-        collections.bulk_replace(
-            new_values, old_collection, new_collection)
+        if dictlike:
+            collections.bulk_replace_dictlike(
+                new_values, old_collection, new_collection)
+        else:
+            collections.bulk_replace(
+                new_values, old_collection, new_collection)
 
         del old._sa_adapter
         self.dispatch.dispose_collection(state, old, old_collection)

@@ -1028,10 +1028,7 @@ class CollectionsTest(fixtures.ORMTest):
         self.assert_(e1 in canary.removed)
         self.assert_(e2 in canary.added)
 
-
-        # key validity on bulk assignment is a basic feature of
-        # MappedCollection but is not present in basic, @converter-less
-        # dict collections.
+        # auto key-validity from bulk operations removed in 1.1
         e3 = creator()
         if isinstance(obj.attr, collections.MappedCollection):
             real_dict = dict(badkey=e3)
@@ -1049,7 +1046,7 @@ class CollectionsTest(fixtures.ORMTest):
             real_dict = dict(keyignored1=e3)
             obj.attr = real_dict
             self.assert_(obj.attr is not real_dict)
-            self.assert_('keyignored1' not in obj.attr)
+            self.assert_('keyignored1' in obj.attr)
             eq_(set(collections.collection_adapter(obj.attr)),
                               set([e3]))
             self.assert_(e2 in canary.removed)
@@ -1152,31 +1149,44 @@ class CollectionsTest(fixtures.ORMTest):
             def __init__(self):
                 self.data = dict()
 
+            @collection.items_iterator
+            def _item_iter(self):
+                return self.data.items()
+
             @collection.appender
             @collection.replaces(1)
             def set(self, item):
                 current = self.data.get(item.a, None)
                 self.data[item.a] = item
                 return current
+
             @collection.remover
             def _remove(self, item):
                 del self.data[item.a]
+
             def __setitem__(self, key, value):
                 self.data[key] = value
+
             def __getitem__(self, key):
                 return self.data[key]
+
             def __delitem__(self, key):
                 del self.data[key]
+
             def values(self):
                 return list(self.data.values())
+
             def __contains__(self, key):
                 return key in self.data
+
             @collection.iterator
             def itervalues(self):
                 return iter(self.data.values())
             __hash__ = object.__hash__
+
             def __eq__(self, other):
                 return self.data == other
+
             def __repr__(self):
                 return 'DictLike(%s)' % repr(self.data)
 

@@ -451,24 +451,18 @@ class collection(object):
             myobj.acollection = [newvalue1, newvalue2]
 
         The converter method will receive the object being assigned and should
-        return an iterable of values suitable for use by the ``appender``
-        method.  A converter must not assign values or mutate the collection,
+        return an iterable of values suitable for use by the
+        :meth:`.collection.appender` -decorated method.
+        A converter must not assign values or mutate the collection,
         its sole job is to adapt the value the user provides into an iterable
         of values for the ORM's use.
 
-        The default converter implementation will use duck-typing to do the
-        conversion.  A dict-like collection will be convert into an iterable
-        of dictionary values, and other types will simply be iterated::
-
-            @collection.converter
-            def convert(self, other): ...
-
-        If the duck-typing of the object does not match the type of this
-        collection, a TypeError is raised.
+        When a converter is not specified, the set() implementation handles
+        incoming collections automatcally using a duck-typing approach.
 
         Supply an implementation of this method if you want to expand the
-        range of possible types that can be assigned in bulk or perform
-        validation on the values about to be assigned.
+        range of possible types that can be assigned in bulk, or perform
+        validation on values which are to be assigned in bulk.
 
         """
         fn._sa_instrument_role = 'converter'
@@ -557,6 +551,19 @@ class collection(object):
             return fn
         return decorator
 
+    @staticmethod
+    def items_iterator(fn):
+        """Tag a method as the "items iterator" for a dictionary-oriented
+        collection.
+
+        Only used during bulk set operations.
+
+        .. versionadded:: 1.1
+
+        """
+        fn._sa_instrument_role = 'items_iterator'
+        return fn
+
 
 collection_adapter = operator.attrgetter('_sa_adapter')
 """Fetch the :class:`.CollectionAdapter` for a collection."""
@@ -604,6 +611,16 @@ class CollectionAdapter(object):
 
         """
         return self.owner_state.dict[self._key] is self._data()
+
+    # TODO: provide "bulk" versions of these
+    def setitem_with_event(self, key, value, initiator=None):
+        self._data().__setitem__(key, value, _sa_initiator=initiator)
+
+    def setitem_without_event(self, key, value, initiator=None):
+        self._data().__setitem__(key, value, _sa_initiator=False)
+
+    def delitem_with_event(self, key, initiator=None):
+        self._data().__delitem__(key, _sa_initiator=initiator)
 
     def bulk_appender(self):
         return self._data()._sa_appender
@@ -722,6 +739,25 @@ class CollectionAdapter(object):
         self._data = weakref.ref(d['data'])
 
 
+def bulk_replace_dictlike(dict_, existing_adapter, new_adapter):
+
+    existing_dict = dict(existing_adapter._data()._sa_items_iterator())
+    existing_keyset = set(existing_dict)
+    constants = existing_keyset.intersection(dict_.keys())
+    additions = set(dict_.keys()).difference(constants)
+    removals = existing_keyset.difference(constants)
+
+    for key in dict_:
+        if key in additions:
+            new_adapter.setitem_with_event(key, dict_[key])
+        elif key in constants:
+            new_adapter.setitem_without_event(key, dict_[key])
+
+    if existing_adapter:
+        for key in removals:
+            existing_adapter.delitem_with_event(key)
+
+
 def bulk_replace(values, existing_adapter, new_adapter):
     """Load a new collection, firing events based on prior like membership.
 
@@ -830,9 +866,9 @@ def _instrument_class(cls):
 
     roles, methods = _locate_roles_and_methods(cls)
 
-    _setup_canned_roles(cls, roles, methods)
+    isdict = _setup_canned_roles(cls, roles, methods)
 
-    _assert_required_roles(cls, roles, methods)
+    _assert_required_roles(cls, roles, methods, isdict)
 
     _set_collection_attributes(cls, roles, methods)
 
@@ -855,7 +891,7 @@ def _locate_roles_and_methods(cls):
             if hasattr(method, '_sa_instrument_role'):
                 role = method._sa_instrument_role
                 assert role in ('appender', 'remover', 'iterator',
-                                'linker', 'converter')
+                                'linker', 'converter', 'items_iterator')
                 roles.setdefault(role, name)
 
             # transfer instrumentation requests from decorated function
@@ -896,8 +932,10 @@ def _setup_canned_roles(cls, roles, methods):
                     not hasattr(fn, '_sa_instrumented')):
                 setattr(cls, method, decorator(fn))
 
+    return collection_type is dict
 
-def _assert_required_roles(cls, roles, methods):
+
+def _assert_required_roles(cls, roles, methods, isdict):
     """ensure all roles are present, and apply implicit instrumentation if
     needed
 
@@ -921,6 +959,14 @@ def _assert_required_roles(cls, roles, methods):
     if 'iterator' not in roles or not hasattr(cls, roles['iterator']):
         raise sa_exc.ArgumentError(
             "Type %s must elect an iterator method to be "
+            "a collection class" % cls.__name__)
+
+    if isdict and (
+            'items_iterator' not in roles
+            or not hasattr(cls, roles['items_iterator'])
+    ):
+        raise sa_exc.ArgumentError(
+            "Type %s must elect a items_iterator method to be "
             "a collection class" % cls.__name__)
 
 
@@ -1456,8 +1502,10 @@ __interfaces = {
           ),
 
     # decorators are required for dicts and object collections.
-    dict: ({'iterator': 'values'}, _dict_decorators()) if util.py3k
-    else ({'iterator': 'itervalues'}, _dict_decorators()),
+    dict: ({'iterator': 'values', 'items_iterator': 'items'},
+           _dict_decorators()) if util.py3k
+    else ({'iterator': 'itervalues', 'items_iterator': 'iteritems'},
+          _dict_decorators()),
 }
 
 
@@ -1512,29 +1560,6 @@ class MappedCollection(dict):
                 (value, self[key], key))
         self.__delitem__(key, _sa_initiator)
 
-    @collection.converter
-    def _convert(self, dictlike):
-        """Validate and convert a dict-like object into values for set()ing.
-
-        This is called behind the scenes when a MappedCollection is replaced
-        entirely by another collection, as in::
-
-          myobj.mappedcollection = {'a':obj1, 'b': obj2} # ...
-
-        Raises a TypeError if the key in any (key, value) pair in the dictlike
-        object does not match the key that this collection's keyfunc would
-        have assigned for that value.
-
-        """
-        for incoming_key, value in util.dictlike_iteritems(dictlike):
-            new_key = self.keyfunc(value)
-            if incoming_key != new_key:
-                raise TypeError(
-                    "Found incompatible key %r for value %r; this "
-                    "collection's "
-                    "keying function requires a key of %r for this value." % (
-                        incoming_key, value, new_key))
-            yield value
 
 # ensure instrumentation is associated with
 # these built-in classes; if a user-defined class
