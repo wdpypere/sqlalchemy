@@ -1864,7 +1864,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
             hstore(postgresql.array(['1', '2']),
                    postgresql.array(['3', None]))['1'],
             ("hstore(ARRAY[%(param_1)s, %(param_2)s], "
-             "ARRAY[%(param_3)s, NULL]) -> %(hstore_1)s AS anon_1"),
+             "ARRAY[%(param_3)s, NULL]) -> %(param_4)s AS anon_1"),
             False
         )
 
@@ -1894,7 +1894,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_cols_concat_get(self):
         self._test_cols(
             (self.hashcol + self.hashcol)['foo'],
-            "test_table.hash || test_table.hash -> %(param_1)s AS anon_1"
+            "(test_table.hash || test_table.hash) -> %(param_1)s AS anon_1"
         )
 
     def test_cols_keys(self):
@@ -2483,13 +2483,13 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_where_getitem(self):
         self._test_where(
             self.jsoncol['bar'] == None,
-            "(test_table.test_column -> %(test_column_1)s) IS NULL"
+            "test_table.test_column -> %(test_column_1)s IS NULL"
         )
 
     def test_where_path(self):
         self._test_where(
             self.jsoncol[("foo", 1)] == None,
-            "(test_table.test_column #> %(test_column_1)s) IS NULL"
+            "test_table.test_column #> %(test_column_1)s IS NULL"
         )
 
     def test_path_typing(self):
@@ -2528,7 +2528,7 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_where_getitem_as_text(self):
         self._test_where(
             self.jsoncol['bar'].astext == None,
-            "(test_table.test_column ->> %(test_column_1)s) IS NULL"
+            "test_table.test_column ->> %(test_column_1)s IS NULL"
         )
 
     def test_where_getitem_astext_cast(self):
@@ -2548,7 +2548,7 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_where_path_as_text(self):
         self._test_where(
             self.jsoncol[("foo", 1)].astext == None,
-            "(test_table.test_column #>> %(test_column_1)s) IS NULL"
+            "test_table.test_column #>> %(test_column_1)s IS NULL"
         )
 
     def test_cols_get(self):

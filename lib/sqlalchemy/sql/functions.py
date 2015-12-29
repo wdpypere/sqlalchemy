@@ -265,7 +265,8 @@ class FunctionElement(Executable, ColumnElement, FromClause):
         # expressions against getitem.  This may need to be made
         # more portable if in the future we support other DBs
         # besides postgresql.
-        if against is operators.getitem:
+        if against is operators.getitem and \
+                isinstance(self.type, sqltypes.Array):
             return Grouping(self)
         else:
             return super(FunctionElement, self).self_group(against=against)

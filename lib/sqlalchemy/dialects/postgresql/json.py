@@ -6,8 +6,8 @@
 # the MIT License: http://www.opensource.org/licenses/mit-license.php
 from __future__ import absolute_import
 
-import collections
 import json
+import collections
 
 from .base import ischema_names
 from ... import types as sqltypes
@@ -18,45 +18,40 @@ from ... import util
 __all__ = ('JSON', 'JSONB')
 
 
-# json : returns json
-INDEX = operators.custom_op(
-    "->", precedence=5, natural_self_precedent=True
-)
-
-# path operator: returns json
-PATHIDX = operators.custom_op(
-    "#>", precedence=5, natural_self_precedent=True
-)
-
-# json + astext: returns text
 ASTEXT = operators.custom_op(
-    "->>", precedence=5, natural_self_precedent=True
+    None, precedence=15, natural_self_precedent=True
 )
 
-# path operator  + astext: returns text
-ASTEXT_PATHIDX = operators.custom_op(
-    "#>>", precedence=5, natural_self_precedent=True
-)
 
 HAS_KEY = operators.custom_op(
-    "?", precedence=5, natural_self_precedent=True
+    "?", precedence=15, natural_self_precedent=True
 )
 
 HAS_ALL = operators.custom_op(
-    "?&", precedence=5, natural_self_precedent=True
+    "?&", precedence=15, natural_self_precedent=True
 )
 
 HAS_ANY = operators.custom_op(
-    "?|", precedence=5, natural_self_precedent=True
+    "?|", precedence=15, natural_self_precedent=True
 )
 
 CONTAINS = operators.custom_op(
-    "@>", precedence=5, natural_self_precedent=True
+    "@>", precedence=15, natural_self_precedent=True
 )
 
 CONTAINED_BY = operators.custom_op(
-    "<@", precedence=5, natural_self_precedent=True
+    "<@", precedence=15, natural_self_precedent=True
 )
+
+
+class JSONPathType(sqltypes.TypeEngine):
+    def bind_processor(self, dialect):
+        def process(value):
+            assert isinstance(value, collections.Sequence)
+            tokens = [util.text_type(elem) for elem in value]
+            return "{%s}" % (", ".join(tokens))
+
+        return process
 
 
 class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
@@ -235,27 +230,17 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
                 :meth:`.ColumnElement.cast`
 
             """
-            against = self.expr.operator
-            if against is PATHIDX:
-                against = ASTEXT_PATHIDX
-            else:
-                against = ASTEXT
 
             return self.expr.left.operate(
-                against, self.expr.right, result_type=self.type.astext_type)
+                ASTEXT, self.expr.right, result_type=self.type.astext_type)
 
         def _setup_getitem(self, index):
-            if isinstance(index, int):
-                operator = INDEX
-            elif not isinstance(index, util.string_types):
-                assert isinstance(index, collections.Sequence)
-                tokens = [util.text_type(elem) for elem in index]
-                index = "{%s}" % (", ".join(tokens))
-                operator = PATHIDX
-            else:
-                operator = INDEX
+            if not isinstance(index, util.string_types) and \
+                    isinstance(index, collections.Sequence):
+                index = self.expr._bind_param(operators.getitem, index)
+                index.type = JSONPathType()
 
-            return operator, index, self.type
+            return index, self.type
 
     comparator_factory = Comparator
 

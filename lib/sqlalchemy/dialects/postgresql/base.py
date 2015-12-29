@@ -1056,11 +1056,41 @@ class PGCompiler(compiler.SQLCompiler):
             self.process(element.stop, **kw),
         )
 
+    def visit_custom_op_binary(self, binary, operator, **kw):
+        from .json import JSONPathType, ASTEXT
+        if operator is ASTEXT:
+            if isinstance(binary.right.type, JSONPathType):
+                opstring = "#>>"
+            else:
+                opstring = "->>"
+            return "%s %s %s" % (
+                self.process(binary.left, **kw),
+                opstring,
+                self.process(binary.right, **kw)
+            )
+        else:
+            return super(PGCompiler, self).visit_custom_op_binary(
+                binary, operator, **kw)
+
     def visit_getitem_binary(self, binary, operator, **kw):
-        return "%s[%s]" % (
-            self.process(binary.left, **kw),
-            self.process(binary.right, **kw)
-        )
+        from .json import JSONPathType, JSON
+        from .hstore import HSTORE
+        if isinstance(binary.left.type, (JSON, HSTORE)):
+            if isinstance(binary.right.type, JSONPathType):
+                opstring = "#>"
+            else:
+                opstring = "->"
+            return "%s %s %s" % (
+                self.process(binary.left, **kw),
+                opstring,
+                self.process(binary.right, **kw)
+            )
+
+        else:
+            return "%s[%s]" % (
+                self.process(binary.left, **kw),
+                self.process(binary.right, **kw)
+            )
 
     def visit_aggregate_order_by(self, element, **kw):
         return "%s ORDER BY %s" % (
