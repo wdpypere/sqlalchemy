@@ -245,7 +245,9 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
                 against, self.expr.right, result_type=self.type.astext_type)
 
         def _setup_getitem(self, index):
-            if not isinstance(index, util.string_types):
+            if isinstance(index, int):
+                operator = INDEX
+            elif not isinstance(index, util.string_types):
                 assert isinstance(index, collections.Sequence)
                 tokens = [util.text_type(elem) for elem in index]
                 index = "{%s}" % (", ".join(tokens))
