@@ -651,10 +651,7 @@ class JSONTest(_LiteralRoundTripFixture, fixtures.TablesTest):
             ])
         ).first()
 
-        compare = self.compare or self.data
-        eq_(row,
-            (compare, ))
-        assert isinstance(row[0], type(compare))
+        eq_(row, (data_element, ))
 
     def test_round_trip_none_as_sql_null(self):
         col = self.tables.data_table.c['nulldata']
@@ -741,8 +738,6 @@ class JSONTest(_LiteralRoundTripFixture, fixtures.TablesTest):
     def _test_index_criteria(self, crit, expected):
         self._criteria_fixture()
         with config.db.connect() as conn:
-            import pdb
-            pdb.set_trace()
             eq_(
                 conn.scalar(
                     select([self.tables.data_table.c.name]).
@@ -754,32 +749,33 @@ class JSONTest(_LiteralRoundTripFixture, fixtures.TablesTest):
     def test_crit_spaces_in_key(self):
         col = self.tables.data_table.c['data']
         self._test_index_criteria(
-            cast(col["key two"], String) == "value2",
+            cast(col["key two"], String) == '"value2"',
             "r2"
         )
 
     def test_crit_simple_int(self):
         col = self.tables.data_table.c['data']
         self._test_index_criteria(
-            cast(col[1], String) == "two",
-            "r2"
+            cast(col[1], String) == '"two"',
+            "r4"
         )
 
     def test_crit_mixed_path(self):
         col = self.tables.data_table.c['data']
         self._test_index_criteria(
-            cast(col[("key3", 2, "six")], String) == "seven",
-            "r5"
+            cast(col[("key3", 1, "six")], String) == '"seven"',
+            "r3"
         )
 
     def test_crit_string_path(self):
         col = self.tables.data_table.c['data']
         self._test_index_criteria(
-            cast(col[("nested", "elem2", "elem4")], String) == "elem5",
+            cast(col[("nested", "elem2", "elem3", "elem4")], String)
+            == '"elem5"',
             "r5"
         )
 
-    def test_unicode_round_trip(self, engine):
+    def test_unicode_round_trip(self):
         s = select([
             cast(
                 {
