@@ -164,25 +164,6 @@ def _in_impl(expr, op, seq_or_selectable, negate_op, **kw):
 
 def _getitem_impl(expr, op, other, **kw):
     if isinstance(expr.type, type_api.INDEXABLE):
-        if isinstance(other, slice):
-            if expr.type.zero_indexes:
-                other = slice(
-                    other.start + 1,
-                    other.stop + 1,
-                    other.step
-                )
-            other = Slice(
-                _literal_as_binds(
-                    other.start, name=expr.key, type_=type_api.INTEGERTYPE),
-                _literal_as_binds(
-                    other.stop, name=expr.key, type_=type_api.INTEGERTYPE),
-                _literal_as_binds(
-                    other.step, name=expr.key, type_=type_api.INTEGERTYPE)
-            )
-        else:
-            if expr.type.zero_indexes:
-                other += 1
-
         other = _literal_as_binds(
             other, name=expr.key, type_=type_api.INTEGERTYPE)
         return _binary_operate(expr, op, other, **kw)

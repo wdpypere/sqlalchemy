@@ -13,7 +13,7 @@ import datetime as dt
 import codecs
 
 from .type_api import TypeEngine, TypeDecorator, to_instance
-from .elements import quoted_name, TypeCoerce as type_coerce, _defer_name
+from .elements import quoted_name, TypeCoerce as type_coerce, _defer_name, Slice, _literal_as_binds
 from .. import exc, util, processors
 from .base import _bind_or_error, SchemaEventTarget
 from . import operators
@@ -84,10 +84,6 @@ class Indexable(object):
 
 
     """
-
-    zero_indexes = False
-    """if True, Python zero-based indexes should be interpreted as one-based
-    on the SQL expression side."""
 
     class Comparator(TypeEngine.Comparator):
 
@@ -1589,6 +1585,10 @@ class Array(Indexable, Concatenable, TypeEngine):
     """
     __visit_name__ = 'ARRAY'
 
+    zero_indexes = False
+    """if True, Python zero-based indexes should be interpreted as one-based
+    on the SQL expression side."""
+
     class Comparator(Indexable.Comparator, Concatenable.Comparator):
 
         """Define comparison operations for :class:`.Array`.
@@ -1601,11 +1601,33 @@ class Array(Indexable, Concatenable, TypeEngine):
         def _setup_getitem(self, index):
             if isinstance(index, slice):
                 return_type = self.type
-            elif self.type.dimensions is None or self.type.dimensions == 1:
-                return_type = self.type.item_type
+                if self.type.zero_indexes:
+                    index = slice(
+                        index.start + 1,
+                        index.stop + 1,
+                        index.step
+                    )
+
+                index = Slice(
+                    _literal_as_binds(
+                        index.start, name=self.expr.key,
+                        type_=type_api.INTEGERTYPE),
+                    _literal_as_binds(
+                        index.stop, name=self.expr.key,
+                        type_=type_api.INTEGERTYPE),
+                    _literal_as_binds(
+                        index.step, name=self.expr.key,
+                        type_=type_api.INTEGERTYPE)
+                )
             else:
-                adapt_kw = {'dimensions': self.type.dimensions - 1}
-                return_type = self.type.adapt(self.type.__class__, **adapt_kw)
+                if self.type.zero_indexes:
+                    index += 1
+                if self.type.dimensions is None or self.type.dimensions == 1:
+                    return_type = self.type.item_type
+                else:
+                    adapt_kw = {'dimensions': self.type.dimensions - 1}
+                    return_type = self.type.adapt(
+                        self.type.__class__, **adapt_kw)
 
             return operators.getitem, index, return_type
 
