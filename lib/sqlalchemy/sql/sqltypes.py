@@ -1607,7 +1607,6 @@ class Array(Indexable, Concatenable, TypeEngine):
                         index.stop + 1,
                         index.step
                     )
-
                 index = Slice(
                     _literal_as_binds(
                         index.start, name=self.expr.key,

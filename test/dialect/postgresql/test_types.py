@@ -892,7 +892,7 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
                 type_=postgresql.ARRAY(Integer)
             )[3],
             "(array_cat(ARRAY[%(param_1)s, %(param_2)s, %(param_3)s], "
-            "ARRAY[%(param_4)s, %(param_5)s, %(param_6)s]))[%(param_7)s]"
+            "ARRAY[%(param_4)s, %(param_5)s, %(param_6)s]))[%(array_cat_1)s]"
         )
 
     def test_array_agg_generic(self):
@@ -1811,7 +1811,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_where_getitem(self):
         self._test_where(
             self.hashcol['bar'] == None,
-            "(test_table.hash -> %(hash_1)s) IS NULL"
+            "test_table.hash -> %(hash_1)s IS NULL"
         )
 
     def test_cols_get(self):
@@ -1864,7 +1864,7 @@ class HStoreTest(AssertsCompiledSQL, fixtures.TestBase):
             hstore(postgresql.array(['1', '2']),
                    postgresql.array(['3', None]))['1'],
             ("hstore(ARRAY[%(param_1)s, %(param_2)s], "
-             "ARRAY[%(param_3)s, NULL]) -> %(param_4)s AS anon_1"),
+             "ARRAY[%(param_3)s, NULL]) -> %(hstore_1)s AS anon_1"),
             False
         )
 
@@ -1979,6 +1979,21 @@ class HStoreRoundTripTest(fixtures.TablesTest):
         insp = inspect(testing.db)
         cols = insp.get_columns('data_table')
         assert isinstance(cols[2]['type'], HSTORE)
+
+    def test_literal_round_trip(self):
+        # in particular, this tests that the array index
+        # operator against the function is handled by PG; with some
+        # array functions it requires outer parenthezisation on the left and
+        # we may not be doing that here
+        expr = hstore(
+            postgresql.array(['1', '2']),
+            postgresql.array(['3', None]))['1']
+        eq_(
+            testing.db.scalar(
+                select([expr])
+            ),
+            "3"
+        )
 
     @testing.requires.psycopg2_native_hstore
     def test_insert_native(self):

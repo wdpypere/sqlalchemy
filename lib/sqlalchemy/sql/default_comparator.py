@@ -164,8 +164,7 @@ def _in_impl(expr, op, seq_or_selectable, negate_op, **kw):
 
 def _getitem_impl(expr, op, other, **kw):
     if isinstance(expr.type, type_api.INDEXABLE):
-        other = _literal_as_binds(
-            other, name=expr.key, type_=type_api.INTEGERTYPE)
+        other = _check_literal(expr, op, other)
         return _binary_operate(expr, op, other, **kw)
     else:
         _unsupported_impl(expr, op, other, **kw)

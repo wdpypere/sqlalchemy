@@ -84,12 +84,19 @@ class array(expression.Tuple):
         super(array, self).__init__(*clauses, **kw)
         self.type = ARRAY(self.type)
 
-    def _bind_param(self, operator, obj):
-        return array([
-            expression.BindParameter(None, o, _compared_to_operator=operator,
-                                     _compared_to_type=self.type, unique=True)
-            for o in obj
-        ])
+    def _bind_param(self, operator, obj, _assume_scalar=False):
+        if _assume_scalar or operator is operators.getitem:
+            # if getitem->slice were called, Indexable produces
+            # a Slice object from that
+            assert isinstance(obj, int)
+            return expression.BindParameter(
+                None, obj, _compared_to_operator=operator,
+                _compared_to_type=self.type, unique=True)
+
+        else:
+            return array([
+                self._bind_param(operator, o, _assume_scalar=True)
+                for o in obj])
 
     def self_group(self, against=None):
         if (against in (
