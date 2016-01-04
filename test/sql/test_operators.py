@@ -632,7 +632,7 @@ class ExtensionOperatorTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         )
 
 
-class IndexableTest(fixtures.TestBase, testing.AssertsCompiledSQL):
+class ArrayIndexOpTest(fixtures.TestBase, testing.AssertsCompiledSQL):
     def setUp(self):
         class MyTypeCompiler(compiler.GenericTypeCompiler):
             def visit_mytype(self, type, **kw):
@@ -658,31 +658,14 @@ class IndexableTest(fixtures.TestBase, testing.AssertsCompiledSQL):
             statement_compiler = MyCompiler
             type_compiler = MyTypeCompiler
 
-        class MyType(Indexable, TypeEngine):
+        class MyType(Array):
             __visit_name__ = 'mytype'
 
             def __init__(self, zero_indexes=False, dimensions=1):
                 if zero_indexes:
                     self.zero_indexes = zero_indexes
                 self.dimensions = dimensions
-
-            class Comparator(Indexable.Comparator):
-                def _setup_getitem(self, index):
-                    if isinstance(index, slice):
-                        return_type = self.type
-                    elif self.type.dimensions is None or \
-                            self.type.dimensions == 1:
-                        return_type = Integer()
-                    else:
-                        adapt_kw = {'dimensions': self.type.dimensions - 1}
-                        # this is also testing the behavior of adapt()
-                        # that we can pass kw that override constructor kws.
-                        # required a small change to util.constructor_copy().
-                        return_type = self.type.adapt(
-                            self.type.__class__, **adapt_kw)
-
-                    return operators.getitem, index, return_type
-            comparator_factory = Comparator
+                self.item_type = Integer()
 
         self.MyType = MyType
         self.__dialect__ = MyDialect()
@@ -694,13 +677,13 @@ class IndexableTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         col = Column('x', self.MyType(dimensions=3))
 
         is_(
-            col[5].type._type_affinity, self.MyType
+            col[5].type._type_affinity, Array
         )
         eq_(
             col[5].type.dimensions, 2
         )
         is_(
-            col[5][6].type._type_affinity, self.MyType
+            col[5][6].type._type_affinity, Array
         )
         eq_(
             col[5][6].type.dimensions, 1
