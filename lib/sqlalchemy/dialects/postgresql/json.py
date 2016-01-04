@@ -17,9 +17,22 @@ from ... import util
 
 __all__ = ('JSON', 'JSONB')
 
+GETITEM = operators.custom_op(
+    None, precedence=15, natural_self_precedent=True,
+    visit_name='jsongetitem'
+)
+
+JSONPATH_GETITEM = operators.custom_op(
+    None, precedence=15, natural_self_precedent=True,
+    visit_name='jsonpath_jsongetitem'
+)
 
 ASTEXT = operators.custom_op(
-    None, precedence=15, natural_self_precedent=True
+    "->>", precedence=15, natural_self_precedent=True,
+)
+
+JSONPATH_ASTEXT = operators.custom_op(
+    "#>>", precedence=15, natural_self_precedent=True,
 )
 
 
@@ -231,16 +244,24 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
             """
 
-            return self.expr.left.operate(
-                ASTEXT, self.expr.right, result_type=self.type.astext_type)
+            if isinstance(self.expr.right.type, JSONPathType):
+                return self.expr.left.operate(
+                    JSONPATH_ASTEXT,
+                    self.expr.right, result_type=self.type.astext_type)
+            else:
+                return self.expr.left.operate(
+                    ASTEXT, self.expr.right, result_type=self.type.astext_type)
 
         def _setup_getitem(self, index):
             if not isinstance(index, util.string_types) and \
                     isinstance(index, collections.Sequence):
                 index = self.expr._bind_param(operators.getitem, index)
                 index.type = JSONPathType()
+                operator = JSONPATH_GETITEM
+            else:
+                operator = GETITEM
 
-            return index, self.type
+            return operator, index, self.type
 
     comparator_factory = Comparator
 

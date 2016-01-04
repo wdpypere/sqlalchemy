@@ -91,10 +91,10 @@ class Indexable(object):
             raise NotImplementedError()
 
         def __getitem__(self, index):
-            adjusted_right_expr, result_type = \
+            adjusted_op, adjusted_right_expr, result_type = \
                 self._setup_getitem(index)
             return self.operate(
-                operators.getitem,
+                adjusted_op,
                 adjusted_right_expr,
                 result_type=result_type
             )
@@ -1628,7 +1628,7 @@ class Array(Indexable, Concatenable, TypeEngine):
                     return_type = self.type.adapt(
                         self.type.__class__, **adapt_kw)
 
-            return index, return_type
+            return operators.getitem, index, return_type
 
         @util.dependencies("sqlalchemy.sql.elements")
         def any(self, elements, other, operator=None):
