@@ -277,7 +277,7 @@ operator_lookup = {
 }
 
 
-def _check_literal(expr, operator, other):
+def _check_literal(expr, operator, other, bindparam_type=None):
     if isinstance(other, (ColumnElement, TextClause)):
         if isinstance(other, BindParameter) and \
                 other.type._isnull:
@@ -292,7 +292,7 @@ def _check_literal(expr, operator, other):
     if isinstance(other, (SelectBase, Alias)):
         return other.as_scalar()
     elif not isinstance(other, Visitable):
-        return expr._bind_param(operator, other)
+        return expr._bind_param(operator, other, type_=bindparam_type)
     else:
         return other
 

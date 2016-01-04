@@ -28,12 +28,15 @@ class JSON(sqltypes.JSON):
     .. versionadded:: 1.1
 
     """
+
+    @util.memoized_property
+    def _str_impl(self):
+        return sqltypes.String(convert_unicode=True)
+
     def bind_processor(self, dialect):
+        string_process = self._str_impl.bind_processor(dialect)
+
         json_serializer = dialect._json_serializer or json.dumps
-        if util.py2k:
-            encoding = dialect.encoding
-        else:
-            encoding = None
 
         def process(value):
             if value is self.NULL:
@@ -42,25 +45,23 @@ class JSON(sqltypes.JSON):
                 value is None and self.none_as_null
             ):
                 return None
-            if encoding:
-                return json_serializer(value).encode(encoding)
-            else:
-                return json_serializer(value)
+
+            serialized = json_serializer(value)
+            if string_process:
+                serialized = string_process(serialized)
+            return serialized
 
         return process
 
     def result_processor(self, dialect, coltype):
+        string_process = self._str_impl.result_processor(dialect, coltype)
         json_deserializer = dialect._json_deserializer or json.loads
-        if util.py2k:
-            encoding = dialect.encoding
-        else:
-            encoding = None
 
         def process(value):
             if value is None:
                 return None
-            if encoding:
-                value = value.decode(encoding)
+            if string_process:
+                value = string_process(value)
             return json_deserializer(value)
         return process
 

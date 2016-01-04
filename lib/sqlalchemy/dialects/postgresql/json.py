@@ -198,7 +198,7 @@ class JSON(sqltypes.JSON):
 
             """
 
-            if isinstance(self.expr.right.type, JSONPathType):
+            if isinstance(self.expr.right.type, sqltypes.JSON.JSONPathType):
                 return self.expr.left.operate(
                     JSONPATH_ASTEXT,
                     self.expr.right, result_type=self.type.astext_type)
@@ -207,42 +207,6 @@ class JSON(sqltypes.JSON):
                     ASTEXT, self.expr.right, result_type=self.type.astext_type)
 
     comparator_factory = Comparator
-
-    def bind_processor(self, dialect):
-        json_serializer = dialect._json_serializer or json.dumps
-        if util.py2k:
-            encoding = dialect.encoding
-        else:
-            encoding = None
-
-        def process(value):
-            if value is self.NULL:
-                value = None
-            elif isinstance(value, elements.Null) or (
-                value is None and self.none_as_null
-            ):
-                return None
-            if encoding:
-                return json_serializer(value).encode(encoding)
-            else:
-                return json_serializer(value)
-
-        return process
-
-    def result_processor(self, dialect, coltype):
-        json_deserializer = dialect._json_deserializer or json.loads
-        if util.py2k:
-            encoding = dialect.encoding
-        else:
-            encoding = None
-
-        def process(value):
-            if value is None:
-                return None
-            if encoding:
-                value = value.decode(encoding)
-            return json_deserializer(value)
-        return process
 
 
 colspecs[sqltypes.JSON] = JSON

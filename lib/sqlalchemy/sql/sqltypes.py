@@ -12,7 +12,9 @@
 import datetime as dt
 import codecs
 import collections
+import json
 
+from . import elements
 from .type_api import TypeEngine, TypeDecorator, to_instance
 from .elements import quoted_name, TypeCoerce as type_coerce, _defer_name, Slice, _literal_as_binds
 from .. import exc, util, processors
@@ -1645,15 +1647,21 @@ class JSON(Indexable, TypeEngine):
     class Comparator(Indexable.Comparator, Concatenable.Comparator):
         """Define comparison operations for :class:`.types.JSON`."""
 
-        def _setup_getitem(self, index):
+        @util.dependencies('sqlalchemy.sql.default_comparator')
+        def _setup_getitem(self, default_comparator, index):
             if not isinstance(index, util.string_types) and \
                     isinstance(index, collections.Sequence):
-                index = self.expr._bind_param(
-                    operators.getitem, index, type_=JSON.JSONPathType)
+                index = default_comparator._check_literal(
+                    self.expr, operators.json_path_getitem_op,
+                    index, bindparam_type=JSON.JSONPathType
+                )
+
                 operator = operators.json_path_getitem_op
             else:
-                index = self.expr._bind_param(
-                    operators.getitem, index, type_=JSON.JSONIndexType)
+                index = default_comparator._check_literal(
+                    self.expr, operators.json_getitem_op,
+                    index, bindparam_type=JSON.JSONIndexType
+                )
                 operator = operators.json_getitem_op
 
             return operator, index, self.type
@@ -1663,6 +1671,42 @@ class JSON(Indexable, TypeEngine):
     @property
     def should_evaluate_none(self):
         return not self.none_as_null
+
+    @util.memoized_property
+    def _str_impl(self):
+        return String(convert_unicode=True)
+
+    def bind_processor(self, dialect):
+        string_process = self._str_impl.bind_processor(dialect)
+
+        json_serializer = dialect._json_serializer or json.dumps
+
+        def process(value):
+            if value is self.NULL:
+                value = None
+            elif isinstance(value, elements.Null) or (
+                value is None and self.none_as_null
+            ):
+                return None
+
+            serialized = json_serializer(value)
+            if string_process:
+                serialized = string_process(serialized)
+            return serialized
+
+        return process
+
+    def result_processor(self, dialect, coltype):
+        string_process = self._str_impl.result_processor(dialect, coltype)
+        json_deserializer = dialect._json_deserializer or json.loads
+
+        def process(value):
+            if value is None:
+                return None
+            if string_process:
+                value = string_process(value)
+            return json_deserializer(value)
+        return process
 
 
 class ARRAY(Indexable, Concatenable, TypeEngine):

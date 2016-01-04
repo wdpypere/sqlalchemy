@@ -2426,73 +2426,6 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
             ) % expected
         )
 
-    def test_bind_serialize_default(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_bind_processor(
-            dialect)
-        eq_(
-            proc({"A": [1, 2, 3, True, False]}),
-            '{"A": [1, 2, 3, true, false]}'
-        )
-
-    def test_bind_serialize_None(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_bind_processor(
-            dialect)
-        eq_(
-            proc(None),
-            'null'
-        )
-
-    def test_bind_serialize_none_as_null(self):
-        dialect = postgresql.dialect()
-        proc = JSON(none_as_null=True)._cached_bind_processor(
-            dialect)
-        eq_(
-            proc(None),
-            None
-        )
-        eq_(
-            proc(null()),
-            None
-        )
-
-    def test_bind_serialize_null(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_bind_processor(
-            dialect)
-        eq_(
-            proc(null()),
-            None
-        )
-
-    def test_result_deserialize_default(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_result_processor(
-            dialect, None)
-        eq_(
-            proc('{"A": [1, 2, 3, true, false]}'),
-            {"A": [1, 2, 3, True, False]}
-        )
-
-    def test_result_deserialize_null(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_result_processor(
-            dialect, None)
-        eq_(
-            proc('null'),
-            None
-        )
-
-    def test_result_deserialize_None(self):
-        dialect = postgresql.dialect()
-        proc = self.test_table.c.test_column.type._cached_result_processor(
-            dialect, None)
-        eq_(
-            proc(None),
-            None
-        )
-
     # This test is a bit misleading -- in real life you will need to cast to
     # do anything
     def test_where_getitem(self):
@@ -2510,16 +2443,16 @@ class JSONTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_path_typing(self):
         col = column('x', JSON())
         is_(
-            col['q'].type._type_affinity, JSON
+            col['q'].type._type_affinity, types.JSON
         )
         is_(
-            col[('q', )].type._type_affinity, JSON
+            col[('q', )].type._type_affinity, types.JSON
         )
         is_(
-            col['q']['p'].type._type_affinity, JSON
+            col['q']['p'].type._type_affinity, types.JSON
         )
         is_(
-            col[('q', 'p')].type._type_affinity, JSON
+            col[('q', 'p')].type._type_affinity, types.JSON
         )
 
     def test_custom_astext_type(self):

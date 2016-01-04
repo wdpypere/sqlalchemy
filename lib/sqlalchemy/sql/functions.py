@@ -256,9 +256,10 @@ class FunctionElement(Executable, ColumnElement, FromClause):
         """
         return self.select().execute()
 
-    def _bind_param(self, operator, obj):
+    def _bind_param(self, operator, obj, type_=None):
         return BindParameter(None, obj, _compared_to_operator=operator,
-                             _compared_to_type=self.type, unique=True)
+                             _compared_to_type=self.type, unique=True,
+                             type_=type_)
 
     def self_group(self, against=None):
         # for the moment, we are parenthesizing all array-returning
@@ -424,10 +425,11 @@ class Function(FunctionElement):
 
         FunctionElement.__init__(self, *clauses, **kw)
 
-    def _bind_param(self, operator, obj):
+    def _bind_param(self, operator, obj, type_=None):
         return BindParameter(self.name, obj,
                              _compared_to_operator=operator,
                              _compared_to_type=self.type,
+                             type_=type_,
                              unique=True)
 
 

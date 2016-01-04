@@ -10,14 +10,14 @@ from sqlalchemy import (
     and_, func, Date, LargeBinary, literal, cast, text, Enum,
     type_coerce, VARCHAR, Time, DateTime, BigInteger, SmallInteger, BOOLEAN,
     BLOB, NCHAR, NVARCHAR, CLOB, TIME, DATE, DATETIME, TIMESTAMP, SMALLINT,
-    INTEGER, DECIMAL, NUMERIC, FLOAT, REAL, ARRAY)
+    INTEGER, DECIMAL, NUMERIC, FLOAT, REAL, ARRAY, JSON)
 from sqlalchemy.sql import ddl
 from sqlalchemy.sql import visitors
 from sqlalchemy import inspection
 from sqlalchemy import exc, types, util, dialects
 for name in dialects.__all__:
     __import__("sqlalchemy.dialects.%s" % name)
-from sqlalchemy.sql import operators, column, table
+from sqlalchemy.sql import operators, column, table, null
 from sqlalchemy.schema import CheckConstraint, AddConstraint
 from sqlalchemy.engine import default
 from sqlalchemy.testing.schema import Table, Column
@@ -1406,6 +1406,81 @@ class BinaryTest(fixtures.TestBase, AssertsExecutionResults):
         f = os.path.join(os.path.dirname(__file__), "..", name)
         with open(f, mode='rb') as o:
             return o.read()
+
+
+class JSONTest(fixtures.TestBase):
+
+    def setup(self):
+        metadata = MetaData()
+        self.test_table = Table('test_table', metadata,
+                                Column('id', Integer, primary_key=True),
+                                Column('test_column', JSON),
+                                )
+        self.jsoncol = self.test_table.c.test_column
+
+        self.dialect = default.DefaultDialect()
+        self.dialect._json_serializer = None
+        self.dialect._json_deserializer = None
+
+    def test_bind_serialize_default(self):
+        proc = self.test_table.c.test_column.type._cached_bind_processor(
+            self.dialect)
+        eq_(
+            proc({"A": [1, 2, 3, True, False]}),
+            '{"A": [1, 2, 3, true, false]}'
+        )
+
+    def test_bind_serialize_None(self):
+        proc = self.test_table.c.test_column.type._cached_bind_processor(
+            self.dialect)
+        eq_(
+            proc(None),
+            'null'
+        )
+
+    def test_bind_serialize_none_as_null(self):
+        proc = JSON(none_as_null=True)._cached_bind_processor(
+            self.dialect)
+        eq_(
+            proc(None),
+            None
+        )
+        eq_(
+            proc(null()),
+            None
+        )
+
+    def test_bind_serialize_null(self):
+        proc = self.test_table.c.test_column.type._cached_bind_processor(
+            self.dialect)
+        eq_(
+            proc(null()),
+            None
+        )
+
+    def test_result_deserialize_default(self):
+        proc = self.test_table.c.test_column.type._cached_result_processor(
+            self.dialect, None)
+        eq_(
+            proc('{"A": [1, 2, 3, true, false]}'),
+            {"A": [1, 2, 3, True, False]}
+        )
+
+    def test_result_deserialize_null(self):
+        proc = self.test_table.c.test_column.type._cached_result_processor(
+            self.dialect, None)
+        eq_(
+            proc('null'),
+            None
+        )
+
+    def test_result_deserialize_None(self):
+        proc = self.test_table.c.test_column.type._cached_result_processor(
+            self.dialect, None)
+        eq_(
+            proc(None),
+            None
+        )
 
 
 class ArrayTest(fixtures.TestBase):
