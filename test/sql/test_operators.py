@@ -15,7 +15,7 @@ from sqlalchemy.sql.elements import _literal_as_text
 from sqlalchemy.schema import Column, Table, MetaData
 from sqlalchemy.sql import compiler
 from sqlalchemy.types import TypeEngine, TypeDecorator, UserDefinedType, \
-    Boolean, NullType, MatchType, Indexable, Concatenable, ARRAY
+    Boolean, NullType, MatchType, Indexable, Concatenable, ARRAY, JSON
 from sqlalchemy.dialects import mysql, firebird, postgresql, oracle, \
     sqlite, mssql
 from sqlalchemy import util
@@ -629,6 +629,124 @@ class ExtensionOperatorTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         self.assert_compile(
             Column('x', MyType()) >> 5,
             "x -> :x_1"
+        )
+
+
+class JSONIndexOpTest(fixtures.TestBase, testing.AssertsCompiledSQL):
+    def setUp(self):
+        class MyTypeCompiler(compiler.GenericTypeCompiler):
+            def visit_mytype(self, type, **kw):
+                return "MYTYPE"
+
+            def visit_myothertype(self, type, **kw):
+                return "MYOTHERTYPE"
+
+        class MyCompiler(compiler.SQLCompiler):
+
+            def visit_json_getitem_op_binary(self, binary, operator, **kw):
+                return self._generate_generic_binary(
+                    binary, " -> ", **kw
+                )
+
+            def visit_json_path_getitem_op_binary(
+                    self, binary, operator, **kw):
+                return self._generate_generic_binary(
+                    binary, " #> ", **kw
+                )
+
+            def visit_getitem_binary(self, binary, operator, **kw):
+                raise NotImplementedError()
+
+        class MyDialect(default.DefaultDialect):
+            statement_compiler = MyCompiler
+            type_compiler = MyTypeCompiler
+
+        class MyType(JSON):
+            __visit_name__ = 'mytype'
+
+            pass
+
+        self.MyType = MyType
+        self.__dialect__ = MyDialect()
+
+    def test_setup_getitem(self):
+        col = Column('x', self.MyType())
+
+        is_(
+            col[5].type._type_affinity, JSON
+        )
+        is_(
+            col[5]['foo'].type._type_affinity, JSON
+        )
+        is_(
+            col[('a', 'b', 'c')].type._type_affinity, JSON
+        )
+
+    def test_getindex_literal_integer(self):
+
+        col = Column('x', self.MyType())
+
+        self.assert_compile(
+            col[5],
+            "x -> :x_1",
+            checkparams={'x_1': 5}
+        )
+
+    def test_getindex_literal_string(self):
+
+        col = Column('x', self.MyType())
+
+        self.assert_compile(
+            col['foo'],
+            "x -> :x_1",
+            checkparams={'x_1': 'foo'}
+        )
+
+    def test_path_getindex_literal(self):
+
+        col = Column('x', self.MyType())
+
+        self.assert_compile(
+            col[('a', 'b', 3, 4, 'd')],
+            "x #> :x_1",
+            checkparams={'x_1': ('a', 'b', 3, 4, 'd')}
+        )
+
+    def test_getindex_sqlexpr(self):
+
+        col = Column('x', self.MyType())
+        col2 = Column('y', Integer())
+
+        self.assert_compile(
+            col[col2],
+            "x -> y",
+            checkparams={}
+        )
+
+        self.assert_compile(
+            col[col2 + 8],
+            "x -> (y + :y_1)",
+            checkparams={'y_1': 8}
+        )
+
+    def test_override_operators(self):
+        special_index_op = operators.custom_op('$$>')
+
+        class MyOtherType(JSON, TypeEngine):
+            __visit_name__ = 'myothertype'
+
+            class Comparator(TypeEngine.Comparator):
+
+                def _adapt_expression(self, op, other_comparator):
+                    return special_index_op, MyOtherType()
+
+            comparator_factory = Comparator
+
+        col = Column('x', MyOtherType())
+        self.assert_compile(
+            col[5],
+            "x $$> :x_1",
+            checkparams={'x_1': 5}
         )
 
 

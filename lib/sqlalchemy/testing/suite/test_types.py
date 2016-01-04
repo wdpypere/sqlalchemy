@@ -5,7 +5,7 @@ from ..assertions import eq_
 from ..config import requirements
 from sqlalchemy import Integer, Unicode, UnicodeText, select
 from sqlalchemy import Date, DateTime, Time, MetaData, String, \
-    Text, Numeric, Float, literal, Boolean, cast, null
+    Text, Numeric, Float, literal, Boolean, cast, null, JSON
 from ..schema import Table, Column
 from ... import testing
 import decimal
@@ -584,8 +584,6 @@ class BooleanTest(_LiteralRoundTripFixture, fixtures.TablesTest):
             row,
             (None, None)
         )
-
-from sqlalchemy.dialects.postgresql import JSON
 
 
 class JSONTest(_LiteralRoundTripFixture, fixtures.TablesTest):

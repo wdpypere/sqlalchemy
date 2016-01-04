@@ -532,7 +532,11 @@ class DefaultRequirements(SuiteRequirements):
 
     @property
     def json_type(self):
-        return only_on(["mysql >= 5.7", "postgresql >= 9.3"])
+        return only_on([
+            lambda config: against(config, "mysql >= 5.7") and
+            not config.db.dialect._is_mariadb,
+            "postgresql >= 9.3"
+        ])
 
     @property
     def datetime_literals(self):

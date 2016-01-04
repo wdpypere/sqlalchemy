@@ -9,23 +9,13 @@ from __future__ import absolute_import
 import json
 import collections
 
-from .base import ischema_names
+from .base import ischema_names, colspecs
 from ... import types as sqltypes
 from ...sql import operators
 from ...sql import elements
 from ... import util
 
 __all__ = ('JSON', 'JSONB')
-
-GETITEM = operators.custom_op(
-    None, precedence=15, natural_self_precedent=True,
-    visit_name='jsongetitem'
-)
-
-JSONPATH_GETITEM = operators.custom_op(
-    None, precedence=15, natural_self_precedent=True,
-    visit_name='jsonpath_jsongetitem'
-)
 
 ASTEXT = operators.custom_op(
     "->>", precedence=15, natural_self_precedent=True,
@@ -57,7 +47,7 @@ CONTAINED_BY = operators.custom_op(
 )
 
 
-class JSONPathType(sqltypes.TypeEngine):
+class JSONPathType(sqltypes.JSON.JSONPathType):
     def bind_processor(self, dialect):
         def process(value):
             assert isinstance(value, collections.Sequence)
@@ -66,24 +56,14 @@ class JSONPathType(sqltypes.TypeEngine):
 
         return process
 
+colspecs[sqltypes.JSON.JSONPathType] = JSONPathType
 
-class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
+
+class JSON(sqltypes.JSON):
     """Represent the Postgresql JSON type.
 
-    The :class:`.JSON` type stores arbitrary JSON format data, e.g.::
-
-        data_table = Table('data_table', metadata,
-            Column('id', Integer, primary_key=True),
-            Column('data', JSON)
-        )
-
-        with engine.connect() as conn:
-            conn.execute(
-                data_table.insert(),
-                data = {"key1": "value1", "key2": "value2"}
-            )
-
-    :class:`.JSON` provides several operations:
+    This type is a specialization of the Core-level :class:`.types.JSON`
+    type, and provides additional SQL operators:
 
     * Index operations (the ``->`` operator)::
 
@@ -163,38 +143,13 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
 
     .. seealso::
 
+        :class:`.types.JSON` - Core level JSON type
+
         :class:`.JSONB`
 
     """
 
-    __visit_name__ = 'JSON'
-
-    hashable = False
     astext_type = sqltypes.Text()
-
-    NULL = util.symbol('JSON_NULL')
-    """Describe the json value of NULL.
-
-    This value is used to force the JSON value of ``"null"`` to be
-    used as the value.   A value of Python ``None`` will be recognized
-    either as SQL NULL or JSON ``"null"``, based on the setting
-    of the :paramref:`.JSON.none_as_null` flag; the :attr:`.JSON.NULL`
-    constant can be used to always resolve to JSON ``"null"`` regardless
-    of this setting.  This is in contrast to the :func:`.sql.null` construct,
-    which always resolves to SQL NULL.  E.g.::
-
-        from sqlalchemy import null
-        from sqlalchemy.dialects.postgresql import JSON
-
-        obj1 = MyObject(json_value=null())  # will *always* insert SQL NULL
-        obj2 = MyObject(json_value=JSON.NULL)  # will *always* insert JSON string "null"
-
-        session.add_all([obj1, obj2])
-        session.commit()
-
-    .. versionadded:: 1.1
-
-    """
 
     def __init__(self, none_as_null=False, astext_type=None):
         """Construct a :class:`.JSON` type.
@@ -221,12 +176,11 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
          .. versionadded:: 1.1.0
 
          """
-        self.none_as_null = none_as_null
+        super(JSON, self).__init__(none_as_null=none_as_null)
         if astext_type is not None:
             self.astext_type = astext_type
 
-    class Comparator(
-            sqltypes.Indexable.Comparator, sqltypes.Concatenable.Comparator):
+    class Comparator(sqltypes.JSON.Comparator):
         """Define comparison operations for :class:`.JSON`."""
 
         @property
@@ -252,22 +206,7 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
                 return self.expr.left.operate(
                     ASTEXT, self.expr.right, result_type=self.type.astext_type)
 
-        def _setup_getitem(self, index):
-            if not isinstance(index, util.string_types) and \
-                    isinstance(index, collections.Sequence):
-                index = self.expr._bind_param(operators.getitem, index)
-                index.type = JSONPathType()
-                operator = JSONPATH_GETITEM
-            else:
-                operator = GETITEM
-
-            return operator, index, self.type
-
     comparator_factory = Comparator
-
-    @property
-    def should_evaluate_none(self):
-        return not self.none_as_null
 
     def bind_processor(self, dialect):
         json_serializer = dialect._json_serializer or json.dumps
@@ -306,6 +245,7 @@ class JSON(sqltypes.Indexable, sqltypes.TypeEngine):
         return process
 
 
+colspecs[sqltypes.JSON] = JSON
 ischema_names['json'] = JSON
 
 

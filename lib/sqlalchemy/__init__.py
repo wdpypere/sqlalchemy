@@ -76,6 +76,7 @@ from .types import (
     INTEGER,
     Integer,
     Interval,
+    JSON,
     LargeBinary,
     NCHAR,
     NVARCHAR,

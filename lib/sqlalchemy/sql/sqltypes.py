@@ -11,6 +11,7 @@
 
 import datetime as dt
 import codecs
+import collections
 
 from .type_api import TypeEngine, TypeDecorator, to_instance
 from .elements import quoted_name, TypeCoerce as type_coerce, _defer_name, Slice, _literal_as_binds
@@ -1490,6 +1491,178 @@ class Interval(_DateAffinity, TypeDecorator):
         """See :meth:`.TypeEngine.coerce_compared_value` for a description."""
 
         return self.impl.coerce_compared_value(op, value)
+
+
+class JSON(Indexable, TypeEngine):
+    """Represent a SQL JSON type.
+
+    .. note::  :class:`.types.JSON` is provided as a facade for vendor-specific
+       JSON types.  Since it supports JSON SQL operations, it only
+       works on backends that have an actual JSON type, currently
+       Postgresql as well as certain versions of MySQL.
+
+    :class:`.types.JSON` is part of the Core in support of the growing
+    popularity of native JSON datatypes.
+
+    The :class:`.types.JSON` type stores arbitrary JSON format data, e.g.::
+
+        data_table = Table('data_table', metadata,
+            Column('id', Integer, primary_key=True),
+            Column('data', JSON)
+        )
+
+        with engine.connect() as conn:
+            conn.execute(
+                data_table.insert(),
+                data = {"key1": "value1", "key2": "value2"}
+            )
+
+    The base :class:`.types.JSON` provides these two operations:
+
+    * Index operations::
+
+        data_table.c.data['some key']
+
+    * Path index operations::
+
+        data_table.c.data[('key_1', 'key_2', ..., 'key_n')]
+
+    Additional operations are available from the dialect-specific versions
+    of :class:`.types.JSON`, such as :class:`.postgresql.JSON` and
+    :class:`.postgresql.JSONB`, each of which offer more operators than
+    just the basic type.
+
+    Index operations return an expression object whose type defaults to
+    :class:`.JSON` by default, so that further JSON-oriented instructions
+    may be called upon the result type.
+
+    The :class:`.JSON` type, when used with the SQLAlchemy ORM, does not
+    detect in-place mutations to the structure.  In order to detect these, the
+    :mod:`sqlalchemy.ext.mutable` extension must be used.  This extension will
+    allow "in-place" changes to the datastructure to produce events which
+    will be detected by the unit of work.  See the example at :class:`.HSTORE`
+    for a simple example involving a dictionary.
+
+    When working with NULL values, the :class:`.JSON` type recommends the
+    use of two specific constants in order to differentiate between a column
+    that evaluates to SQL NULL, e.g. no value, vs. the JSON-encoded string
+    of ``"null"``.   To insert or select against a value that is SQL NULL,
+    use the constant :func:`.null`::
+
+        conn.execute(table.insert(), json_value=null())
+
+    To insert or select against a value that is JSON ``"null"``, use the
+    constant :attr:`.JSON.NULL`::
+
+        conn.execute(table.insert(), json_value=JSON.NULL)
+
+    The :class:`.JSON` type supports a flag
+    :paramref:`.JSON.none_as_null` which when set to True will result
+    in the Python constant ``None`` evaluating to the value of SQL
+    NULL, and when set to False results in the Python constant
+    ``None`` evaluating to the value of JSON ``"null"``.    The Python
+    value ``None`` may be used in conjunction with either
+    :attr:`.JSON.NULL` and :func:`.null` in order to indicate NULL
+    values, but care must be taken as to the value of the
+    :paramref:`.JSON.none_as_null` in these cases.
+
+    Custom serializers and deserializers are specified at the dialect level,
+    that is using :func:`.create_engine`.  The reason for this is that when
+    using psycopg2, the DBAPI only allows serializers at the per-cursor
+    or per-connection level.   E.g.::
+
+        engine = create_engine("postgresql://scott:tiger@localhost/test",
+                                json_serializer=my_serialize_fn,
+                                json_deserializer=my_deserialize_fn
+                        )
+
+    When using the psycopg2 dialect, the json_deserializer is registered
+    against the database using ``psycopg2.extras.register_default_json``.
+
+    .. versionadded:: 0.9
+
+
+    """
+    __visit_name__ = 'JSON'
+
+    hashable = False
+    NULL = util.symbol('JSON_NULL')
+    """Describe the json value of NULL.
+
+    This value is used to force the JSON value of ``"null"`` to be
+    used as the value.   A value of Python ``None`` will be recognized
+    either as SQL NULL or JSON ``"null"``, based on the setting
+    of the :paramref:`.JSON.none_as_null` flag; the :attr:`.JSON.NULL`
+    constant can be used to always resolve to JSON ``"null"`` regardless
+    of this setting.  This is in contrast to the :func:`.sql.null` construct,
+    which always resolves to SQL NULL.  E.g.::
+
+        from sqlalchemy import null
+        from sqlalchemy.dialects.postgresql import JSON
+
+        obj1 = MyObject(json_value=null())  # will *always* insert SQL NULL
+        obj2 = MyObject(json_value=JSON.NULL)  # will *always* insert JSON string "null"
+
+        session.add_all([obj1, obj2])
+        session.commit()
+
+    """
+
+    def __init__(self, none_as_null=False):
+        """Construct a :class:`.types.JSON` type.
+
+        :param none_as_null: if True, persist the value ``None`` as a
+         SQL NULL value, not the JSON encoding of ``null``.   Note that
+         when this flag is False, the :func:`.null` construct can still
+         be used to persist a NULL value::
+
+             from sqlalchemy import null
+             conn.execute(table.insert(), data=null())
+
+         .. seealso::
+
+              :attr:`.types.JSON.NULL`
+
+         """
+        self.none_as_null = none_as_null
+
+    class JSONIndexType(TypeEngine):
+        """Placeholder for the datatype of a JSON index value.
+
+        This allows execution-time processing of JSON index values
+        for special syntaxes.
+
+        """
+
+    class JSONPathType(TypeEngine):
+        """Placeholder type for JSON path operations.
+
+        This allows execution-time processing of a path-based
+        index value into a specific SQL syntax.
+
+        """
+
+    class Comparator(Indexable.Comparator, Concatenable.Comparator):
+        """Define comparison operations for :class:`.types.JSON`."""
+
+        def _setup_getitem(self, index):
+            if not isinstance(index, util.string_types) and \
+                    isinstance(index, collections.Sequence):
+                index = self.expr._bind_param(
+                    operators.getitem, index, type_=JSON.JSONPathType)
+                operator = operators.json_path_getitem_op
+            else:
+                index = self.expr._bind_param(
+                    operators.getitem, index, type_=JSON.JSONIndexType)
+                operator = operators.json_getitem_op
+
+            return operator, index, self.type
+
+    comparator_factory = Comparator
+
+    @property
+    def should_evaluate_none(self):
+        return not self.none_as_null
 
 
 class ARRAY(Indexable, Concatenable, TypeEngine):

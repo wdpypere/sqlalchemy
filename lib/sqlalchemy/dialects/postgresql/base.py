@@ -1056,12 +1056,12 @@ class PGCompiler(compiler.SQLCompiler):
             self.process(element.stop, **kw),
         )
 
-    def visit_jsongetitem_binary(self, binary, operator, **kw):
+    def visit_json_getitem_op_binary(self, binary, operator, **kw):
         return self._generate_generic_binary(
             binary, " -> ", **kw
         )
 
-    def visit_jsonpath_jsongetitem_binary(self, binary, operator, **kw):
+    def visit_json_path_getitem_op_binary(self, binary, operator, **kw):
         return self._generate_generic_binary(
             binary, " #> ", **kw
         )

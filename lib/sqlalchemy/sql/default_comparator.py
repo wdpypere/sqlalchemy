@@ -240,6 +240,8 @@ operator_lookup = {
     "mod": (_binary_operate,),
     "truediv": (_binary_operate,),
     "custom_op": (_binary_operate,),
+    "json_path_getitem_op": (_binary_operate, ),
+    "json_getitem_op": (_binary_operate, ),
     "concat_op": (_binary_operate,),
     "lt": (_boolean_compare, operators.ge),
     "le": (_boolean_compare, operators.gt),

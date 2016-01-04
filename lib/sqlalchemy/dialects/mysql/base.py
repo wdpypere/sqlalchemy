@@ -539,10 +539,11 @@ output::
 import datetime
 import re
 import sys
+import json
 
 from ... import schema as sa_schema
 from ... import exc, log, sql, util
-from ...sql import compiler
+from ...sql import compiler, elements
 from array import array as _array
 
 from ...engine import reflection
@@ -690,7 +691,6 @@ class _MatchType(sqltypes.Float, sqltypes.MatchType):
         # TODO: float arguments?
         sqltypes.Float.__init__(self)
         sqltypes.MatchType.__init__(self)
-
 
 
 class NUMERIC(_NumericType, sqltypes.NUMERIC):
@@ -1370,6 +1370,78 @@ class LONGBLOB(sqltypes._Binary):
     __visit_name__ = 'LONGBLOB'
 
 
+class JSON(sqltypes.JSON):
+    """MySQL JSON type.
+
+    MySQL supports JSON as of version 5.7.  Note that MariaDB does **not**
+    support JSON at the time of this writing.
+
+    The :class:`.mysql.JSON` type supports persistence of JSON values
+    as well as the core index operations provided by :class:`.types.JSON`
+    datatype, by adapting the operations to render the ``JSON_EXTRACT``
+    function at the database level.
+
+    .. versionadded:: 1.1
+
+    """
+    def bind_processor(self, dialect):
+        json_serializer = dialect._json_serializer or json.dumps
+        if util.py2k:
+            encoding = dialect.encoding
+        else:
+            encoding = None
+
+        def process(value):
+            if value is self.NULL:
+                value = None
+            elif isinstance(value, elements.Null) or (
+                value is None and self.none_as_null
+            ):
+                return None
+            if encoding:
+                return json_serializer(value).encode(encoding)
+            else:
+                return json_serializer(value)
+
+        return process
+
+    def result_processor(self, dialect, coltype):
+        json_deserializer = dialect._json_deserializer or json.loads
+        if util.py2k:
+            encoding = dialect.encoding
+        else:
+            encoding = None
+
+        def process(value):
+            if value is None:
+                return None
+            if encoding:
+                value = value.decode(encoding)
+            return json_deserializer(value)
+        return process
+
+class JSONIndexType(sqltypes.JSON.JSONIndexType):
+    def bind_processor(self, dialect):
+        def process(value):
+            assert isinstance(value, collections.Sequence)
+            tokens = [util.text_type(elem) for elem in value]
+            return "{%s}" % (", ".join(tokens))
+
+        return process
+
+colspecs[sqltypes.JSON.JSONIndexType] = JSONIndexType
+
+class JSONPathType(sqltypes.JSON.JSONPathType):
+    def bind_processor(self, dialect):
+        def process(value):
+            assert isinstance(value, collections.Sequence)
+            tokens = [util.text_type(elem) for elem in value]
+            return "{%s}" % (", ".join(tokens))
+
+        return process
+
+colspecs[sqltypes.JSON.JSONPathType] = JSONPathType
+
 class _EnumeratedValues(_StringType):
     def _init_values(self, values, kw):
         self.quoting = kw.pop('quoting', 'auto')
@@ -1704,7 +1776,8 @@ colspecs = {
     sqltypes.Float: FLOAT,
     sqltypes.Time: TIME,
     sqltypes.Enum: ENUM,
-    sqltypes.MatchType: _MatchType
+    sqltypes.MatchType: _MatchType,
+    sqltypes.JSON: JSON
 }
 
 # Everything 3.23 through 5.1 excepting OpenGIS types.
@@ -1724,6 +1797,7 @@ ischema_names = {
     'float': FLOAT,
     'int': INTEGER,
     'integer': INTEGER,
+    'json': JSON,
     'longblob': LONGBLOB,
     'longtext': LONGTEXT,
     'mediumblob': MEDIUMBLOB,
@@ -1769,6 +1843,16 @@ class MySQLCompiler(compiler.SQLCompiler):
     def visit_sysdate_func(self, fn, **kw):
         return "SYSDATE()"
 
+    def visit_json_getitem_op_binary(self, binary, operator, **kw):
+        return "JSON_EXTRACT(%s, %s)" % (
+            self.process(binary.left),
+            self.process(binary.right))
+
+    def visit_json_path_getitem_op_binary(self, binary, operator, **kw):
+        return "JSON_EXTRACT(%s, %s)" % (
+            self.process(binary.left),
+            self.process(binary.right))
+
     def visit_concat_op_binary(self, binary, operator, **kw):
         return "concat(%s, %s)" % (self.process(binary.left),
                                    self.process(binary.right))
@@ -1801,6 +1885,8 @@ class MySQLCompiler(compiler.SQLCompiler):
             return self.dialect.type_compiler.process(adapted)
         elif isinstance(type_, sqltypes._Binary):
             return 'BINARY'
+        elif isinstance(type_, sqltypes.JSON):
+            return "JSON"
         elif isinstance(type_, sqltypes.NUMERIC):
             return self.dialect.type_compiler.process(
                 type_).replace('NUMERIC', 'DECIMAL')
@@ -2316,6 +2402,9 @@ class MySQLTypeCompiler(compiler.GenericTypeCompiler):
     def visit_VARBINARY(self, type_, **kw):
         return "VARBINARY(%d)" % type_.length
 
+    def visit_JSON(self, type_, **kw):
+        return "JSON"
+
     def visit_large_binary(self, type_, **kw):
         return self.visit_BLOB(type_)
 
@@ -2435,10 +2524,13 @@ class MySQLDialect(default.DefaultDialect):
         })
     ]
 
-    def __init__(self, isolation_level=None, **kwargs):
+    def __init__(self, isolation_level=None, json_serializer=None,
+                 json_deserializer=None, **kwargs):
         kwargs.pop('use_ansiquotes', None)   # legacy
         default.DefaultDialect.__init__(self, **kwargs)
         self.isolation_level = isolation_level
+        self._json_serializer = json_serializer
+        self._json_deserializer = json_deserializer
 
     def on_connect(self):
         if self.isolation_level is not None:
