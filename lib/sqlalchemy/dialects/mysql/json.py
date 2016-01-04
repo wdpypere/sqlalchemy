@@ -69,9 +69,9 @@ class JSONIndexType(sqltypes.JSON.JSONIndexType):
     def bind_processor(self, dialect):
         def process(value):
             if isinstance(value, int):
-                return "$.[%s]" % value
+                return "$[%s]" % value
             else:
-                return "$.%s" % value
+                return '$."%s"' % value
 
         return process
 
@@ -79,10 +79,10 @@ class JSONIndexType(sqltypes.JSON.JSONIndexType):
 class JSONPathType(sqltypes.JSON.JSONPathType):
     def bind_processor(self, dialect):
         def process(value):
-            return "$.%s" % (
-                ".".join([
+            return "$%s" % (
+                "".join([
                     "[%s]" % elem if isinstance(elem, int)
-                    else "%s" % elem for elem in value
+                    else '."%s"' % elem for elem in value
                 ])
             )
 
