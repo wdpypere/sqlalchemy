@@ -667,8 +667,8 @@ colspecs = {
     sqltypes.Enum: ENUM,
     sqltypes.MatchType: _MatchType,
     sqltypes.JSON: JSON,
-    sqltypes.JSON.JSONIndexType, JSONIndexType,
-    sqltypes.JSON.JSONPathType, JSONPathType
+    sqltypes.JSON.JSONIndexType: JSONIndexType,
+    sqltypes.JSON.JSONPathType: JSONPathType
 
 }
 
