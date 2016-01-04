@@ -275,7 +275,7 @@
         :tickets: 3132
 
         Added support for the SQL-standard function :class:`.array_agg`,
-        which automatically returns an :class:`.Array` of the correct type
+        which automatically returns an :class:`.postgresql.ARRAY` of the correct type
         and supports index / slice operations, as well as
         :func:`.postgresql.array_agg`, which returns a :class:`.postgresql.ARRAY`
         with additional comparison features.   As arrays are only
@@ -292,8 +292,8 @@
         :tags: feature, sql
         :tickets: 3516
 
-        Added a new type to core :class:`.types.Array`.  This is the
-        base of the PostgreSQL :class:`.ARRAY` type, and is now part of Core
+        Added a new type to core :class:`.types.ARRAY`.  This is the
+        base of the PostgreSQL :class:`.postgresql.ARRAY` type, and is now part of Core
         to begin supporting various SQL-standard array-supporting features
         including some functions and eventual support for native arrays
         on other databases that have an "array" concept, such as DB2 or Oracle.

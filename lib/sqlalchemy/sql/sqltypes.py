@@ -1492,7 +1492,7 @@ class Interval(_DateAffinity, TypeDecorator):
         return self.impl.coerce_compared_value(op, value)
 
 
-class Array(Indexable, Concatenable, TypeEngine):
+class ARRAY(Indexable, Concatenable, TypeEngine):
     """Represent a SQL Array type.
 
     .. note::  This type serves as the basis for all ARRAY operations.
@@ -1502,17 +1502,17 @@ class Array(Indexable, Concatenable, TypeEngine):
        with PostgreSQL, as it provides additional operators specific
        to that backend.
 
-    :class:`.Array` is part of the Core in support of various SQL standard
+    :class:`.types.ARRAY` is part of the Core in support of various SQL standard
     functions such as :class:`.array_agg` which explicitly involve arrays;
     however, with the exception of the PostgreSQL backend and possibly
     some third-party dialects, no other SQLAlchemy built-in dialect has
     support for this type.
 
-    An :class:`.Array` type is constructed given the "type"
+    An :class:`.types.ARRAY` type is constructed given the "type"
     of element::
 
         mytable = Table("mytable", metadata,
-                Column("data", Array(Integer))
+                Column("data", ARRAY(Integer))
             )
 
     The above type represents an N-dimensional array,
@@ -1525,11 +1525,11 @@ class Array(Indexable, Concatenable, TypeEngine):
                 data=[1,2,3]
         )
 
-    The :class:`.Array` type can be constructed given a fixed number
+    The :class:`.types.ARRAY` type can be constructed given a fixed number
     of dimensions::
 
         mytable = Table("mytable", metadata,
-                Column("data", Array(Integer, dimensions=2))
+                Column("data", ARRAY(Integer, dimensions=2))
             )
 
     Sending a number of dimensions is optional, but recommended if the
@@ -1551,10 +1551,10 @@ class Array(Indexable, Concatenable, TypeEngine):
             >>> expr = table.c.column[5]  # returns ARRAY(Integer, dimensions=1)
             >>> expr = expr[6]  # returns Integer
 
-    For 1-dimensional arrays, an :class:`.Array` instance with no
+    For 1-dimensional arrays, an :class:`.types.ARRAY` instance with no
     dimension parameter will generally assume single-dimensional behaviors.
 
-    SQL expressions of type :class:`.Array` have support for "index" and
+    SQL expressions of type :class:`.types.ARRAY` have support for "index" and
     "slice" behavior.  The Python ``[]`` operator works normally here, given
     integer indexes or slices.  Arrays default to 1-based indexing.
     The operator produces binary expression
@@ -1571,9 +1571,9 @@ class Array(Indexable, Concatenable, TypeEngine):
             mytable.c.data[2:7]: [1, 2, 3]
         })
 
-    The :class:`.Array` type also provides for the operators
-    :meth:`.Array.Comparator.any` and :meth:`.Array.Comparator.all`.
-    The PostgreSQL-specific version of :class:`.Array` also provides additional
+    The :class:`.types.ARRAY` type also provides for the operators
+    :meth:`.types.ARRAY.Comparator.any` and :meth:`.types.ARRAY.Comparator.all`.
+    The PostgreSQL-specific version of :class:`.types.ARRAY` also provides additional
     operators.
 
     .. versionadded:: 1.1.0
@@ -1591,7 +1591,7 @@ class Array(Indexable, Concatenable, TypeEngine):
 
     class Comparator(Indexable.Comparator, Concatenable.Comparator):
 
-        """Define comparison operations for :class:`.Array`.
+        """Define comparison operations for :class:`.types.ARRAY`.
 
         More operators are available on the dialect-specific form
         of this type.  See :class:`.postgresql.ARRAY.Comparator`.
@@ -1656,7 +1656,7 @@ class Array(Indexable, Concatenable, TypeEngine):
 
                 :func:`.sql.expression.any_`
 
-                :meth:`.Array.Comparator.all`
+                :meth:`.types.ARRAY.Comparator.all`
 
             """
             operator = operator if operator else operators.eq
@@ -1691,7 +1691,7 @@ class Array(Indexable, Concatenable, TypeEngine):
 
                 :func:`.sql.expression.all_`
 
-                :meth:`.Array.Comparator.any`
+                :meth:`.types.ARRAY.Comparator.any`
 
             """
             operator = operator if operator else operators.eq
@@ -1704,18 +1704,18 @@ class Array(Indexable, Concatenable, TypeEngine):
 
     def __init__(self, item_type, as_tuple=False, dimensions=None,
                  zero_indexes=False):
-        """Construct an :class:`.Array`.
+        """Construct an :class:`.types.ARRAY`.
 
         E.g.::
 
-          Column('myarray', Array(Integer))
+          Column('myarray', ARRAY(Integer))
 
         Arguments are:
 
         :param item_type: The data type of items of this array. Note that
           dimensionality is irrelevant here, so multi-dimensional arrays like
-          ``INTEGER[][]``, are constructed as ``Array(Integer)``, not as
-          ``Array(Array(Integer))`` or such.
+          ``INTEGER[][]``, are constructed as ``ARRAY(Integer)``, not as
+          ``ARRAY(ARRAY(Integer))`` or such.
 
         :param as_tuple=False: Specify whether return results
           should be converted to tuples from lists.  This parameter is
@@ -1727,7 +1727,7 @@ class Array(Indexable, Concatenable, TypeEngine):
          on the database, how it goes about interpreting Python and
          result values, as well as how expression behavior in conjunction
          with the "getitem" operator works.  See the description at
-         :class:`.Array` for additional detail.
+         :class:`.types.ARRAY` for additional detail.
 
         :param zero_indexes=False: when True, index values will be converted
          between Python zero-based and SQL one-based indexes, e.g.
@@ -1735,7 +1735,7 @@ class Array(Indexable, Concatenable, TypeEngine):
          to the database.
 
         """
-        if isinstance(item_type, Array):
+        if isinstance(item_type, ARRAY):
             raise ValueError("Do not nest ARRAY types; ARRAY(basetype) "
                              "handles multi-dimensional arrays of basetype")
         if isinstance(item_type, type):

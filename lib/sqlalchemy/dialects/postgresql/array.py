@@ -113,15 +113,15 @@ CONTAINED_BY = operators.custom_op("<@", precedence=5)
 OVERLAP = operators.custom_op("&&", precedence=5)
 
 
-class ARRAY(SchemaEventTarget, sqltypes.Array):
+class ARRAY(SchemaEventTarget, sqltypes.ARRAY):
 
     """Postgresql ARRAY type.
 
     .. versionchanged:: 1.1 The :class:`.postgresql.ARRAY` type is now
-       a subclass of the core :class:`.Array` type.
+       a subclass of the core :class:`.types.ARRAY` type.
 
     The :class:`.postgresql.ARRAY` type is constructed in the same way
-    as the core :class:`.Array` type; a member type is required, and a
+    as the core :class:`.types.ARRAY` type; a member type is required, and a
     number of dimensions is recommended if the type is to be used for more
     than one dimension::
 
@@ -132,9 +132,9 @@ class ARRAY(SchemaEventTarget, sqltypes.Array):
             )
 
     The :class:`.postgresql.ARRAY` type provides all operations defined on the
-    core :class:`.Array` type, including support for "dimensions", indexed
-    access, and simple matching such as :meth:`.Array.Comparator.any`
-    and :meth:`.Array.Comparator.all`.  :class:`.postgresql.ARRAY` class also
+    core :class:`.types.ARRAY` type, including support for "dimensions", indexed
+    access, and simple matching such as :meth:`.types.ARRAY.Comparator.any`
+    and :meth:`.types.ARRAY.Comparator.all`.  :class:`.postgresql.ARRAY` class also
     provides PostgreSQL-specific methods for containment operations, including
     :meth:`.postgresql.ARRAY.Comparator.contains`
     :meth:`.postgresql.ARRAY.Comparator.contained_by`,
@@ -151,20 +151,20 @@ class ARRAY(SchemaEventTarget, sqltypes.Array):
 
     .. seealso::
 
-        :class:`.types.Array` - base array type
+        :class:`.types.ARRAY` - base array type
 
         :class:`.postgresql.array` - produces a literal array value.
 
     """
 
-    class Comparator(sqltypes.Array.Comparator):
+    class Comparator(sqltypes.ARRAY.Comparator):
 
         """Define comparison operations for :class:`.ARRAY`.
 
         Note that these operations are in addition to those provided
-        by the base :class:`.types.Array.Comparator` class, including
-        :meth:`.types.Array.Comparator.any` and
-        :meth:`.types.Array.Comparator.all`.
+        by the base :class:`.types.ARRAY.Comparator` class, including
+        :meth:`.types.ARRAY.Comparator.any` and
+        :meth:`.types.ARRAY.Comparator.all`.
 
         """
 

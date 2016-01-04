@@ -7,7 +7,7 @@ from sqlalchemy import testing
 import datetime
 from sqlalchemy import Table, MetaData, Column, Integer, Enum, Float, select, \
     func, DateTime, Numeric, exc, String, cast, REAL, TypeDecorator, Unicode, \
-    Text, null, text, column, Array, any_, all_
+    Text, null, text, column, ARRAY, any_, all_
 from sqlalchemy.sql import operators
 from sqlalchemy import types
 import sqlalchemy as sa
@@ -819,7 +819,7 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
     def test_array_index_map_dimensions(self):
         col = column('x', postgresql.ARRAY(Integer, dimensions=3))
         is_(
-            col[5].type._type_affinity, Array
+            col[5].type._type_affinity, ARRAY
         )
         assert isinstance(
             col[5].type, postgresql.ARRAY
@@ -828,7 +828,7 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
             col[5].type.dimensions, 2
         )
         is_(
-            col[5][6].type._type_affinity, Array
+            col[5][6].type._type_affinity, ARRAY
         )
         assert isinstance(
             col[5][6].type, postgresql.ARRAY
@@ -859,8 +859,8 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
         )
 
         # type affinity is Array...
-        is_(arrtable.c.intarr[1:3].type._type_affinity, Array)
-        is_(arrtable.c.strarr[1:3].type._type_affinity, Array)
+        is_(arrtable.c.intarr[1:3].type._type_affinity, ARRAY)
+        is_(arrtable.c.strarr[1:3].type._type_affinity, ARRAY)
 
         # but the slice returns the actual type
         assert isinstance(arrtable.c.intarr[1:3].type, postgresql.ARRAY)
@@ -897,7 +897,7 @@ class ArrayTest(AssertsCompiledSQL, fixtures.TestBase):
 
     def test_array_agg_generic(self):
         expr = func.array_agg(column('q', Integer))
-        is_(expr.type.__class__, types.Array)
+        is_(expr.type.__class__, types.ARRAY)
         is_(expr.type.item_type.__class__, Integer)
 
     def test_array_agg_specific(self):

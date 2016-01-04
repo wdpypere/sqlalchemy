@@ -507,28 +507,28 @@ UNIONs with parenthesized SELECT statements is much less common than the
 Array support added to Core; new ANY and ALL operators
 ------------------------------------------------------
 
-Along with the enhancements made to the Postgresql :class:`.ARRAY`
-type described in :ref:`change_3503`, the base class of :class:`.ARRAY`
-itself has been moved to Core in a new class :class:`.types.Array`.
+Along with the enhancements made to the Postgresql :class:`.postgresql.ARRAY`
+type described in :ref:`change_3503`, the base class of :class:`.postgresql.ARRAY`
+itself has been moved to Core in a new class :class:`.types.ARRAY`.
 
 Arrays are part of the SQL standard, as are several array-oriented functions
 such as ``array_agg()`` and ``unnest()``.  In support of these constructs
 for not just PostgreSQL but also potentially for other array-capable backends
 in the future such as DB2, the majority of array logic for SQL expressions
-is now in Core.   The :class:`.Array` type still **only works on
+is now in Core.   The :class:`.types.ARRAY` type still **only works on
 Postgresql**, however it can be used directly, supporting special array
 use cases such as indexed access, as well as support for the ANY and ALL::
 
     mytable = Table("mytable", metadata,
-            Column("data", Array(Integer, dimensions=2))
+            Column("data", ARRAY(Integer, dimensions=2))
         )
 
     expr = mytable.c.data[5][6]
 
     expr = mytable.c.data[5].any(12)
 
-In support of ANY and ALL, the :class:`.Array` type retains the same
-:meth:`.Array.Comparator.any` and :meth:`.Array.Comparator.all` methods
+In support of ANY and ALL, the :class:`.types.ARRAY` type retains the same
+:meth:`.types.ARRAY.Comparator.any` and :meth:`.types.ARRAY.Comparator.all` methods
 from the PostgreSQL type, but also exports these operations to new
 standalone operator functions :func:`.sql.expression.any_` and
 :func:`.sql.expression.all_`.  These two functions work in more
@@ -541,7 +541,7 @@ as::
 
 For the PostgreSQL-specific operators "contains", "contained_by", and
 "overlaps", one should continue to use the :class:`.postgresql.ARRAY`
-type directly, which provides all functionality of the :class:`.Array`
+type directly, which provides all functionality of the :class:`.types.ARRAY`
 type as well.
 
 The :func:`.sql.expression.any_` and :func:`.sql.expression.all_` operators
@@ -564,7 +564,7 @@ such as::
 New Function features, "WITHIN GROUP", array_agg and set aggregate functions
 ----------------------------------------------------------------------------
 
-With the new :class:`.Array` type we can also implement a pre-typed
+With the new :class:`.types.ARRAY` type we can also implement a pre-typed
 function for the ``array_agg()`` SQL function that returns an array,
 which is now available using :class:`.array_agg`::
 
@@ -767,8 +767,9 @@ As described in :ref:`change_3499`, the ORM relies upon being able to
 produce a hash function for column values when a query's selected entities
 mixes full ORM entities with column expressions.   The ``hashable=False``
 flag is now correctly set on all of PG's "data structure" types, including
-:class:`.ARRAY` and :class:`.JSON`.  The :class:`.JSONB` and :class:`.HSTORE`
-types already included this flag.  For :class:`.ARRAY`,
+:class:`.postgresql.ARRAY` and :class:`.postgresql.JSON`.
+The :class:`.JSONB` and :class:`.HSTORE`
+types already included this flag.  For :class:`.postgresql.ARRAY`,
 this is conditional based on the :paramref:`.postgresql.ARRAY.as_tuple`
 flag, however it should no longer be necessary to set this flag
 in order to have an array value present in a composed ORM row.

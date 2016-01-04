@@ -2605,6 +2605,10 @@ class MySQLDialect(default.DefaultDialect):
         default.DefaultDialect.initialize(self, connection)
 
     @property
+    def _is_mariadb(self):
+        return 'MariaDB' in self.server_version_info
+
+    @property
     def _supports_cast(self):
         return self.server_version_info is None or \
             self.server_version_info >= (4, 0, 2)

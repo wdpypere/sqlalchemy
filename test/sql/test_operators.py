@@ -15,7 +15,7 @@ from sqlalchemy.sql.elements import _literal_as_text
 from sqlalchemy.schema import Column, Table, MetaData
 from sqlalchemy.sql import compiler
 from sqlalchemy.types import TypeEngine, TypeDecorator, UserDefinedType, \
-    Boolean, NullType, MatchType, Indexable, Concatenable, Array
+    Boolean, NullType, MatchType, Indexable, Concatenable, ARRAY
 from sqlalchemy.dialects import mysql, firebird, postgresql, oracle, \
     sqlite, mssql
 from sqlalchemy import util
@@ -658,7 +658,7 @@ class ArrayIndexOpTest(fixtures.TestBase, testing.AssertsCompiledSQL):
             statement_compiler = MyCompiler
             type_compiler = MyTypeCompiler
 
-        class MyType(Array):
+        class MyType(ARRAY):
             __visit_name__ = 'mytype'
 
             def __init__(self, zero_indexes=False, dimensions=1):
@@ -677,13 +677,13 @@ class ArrayIndexOpTest(fixtures.TestBase, testing.AssertsCompiledSQL):
         col = Column('x', self.MyType(dimensions=3))
 
         is_(
-            col[5].type._type_affinity, Array
+            col[5].type._type_affinity, ARRAY
         )
         eq_(
             col[5].type.dimensions, 2
         )
         is_(
-            col[5][6].type._type_affinity, Array
+            col[5][6].type._type_affinity, ARRAY
         )
         eq_(
             col[5][6].type.dimensions, 1
@@ -2256,7 +2256,7 @@ class AnyAllTest(fixtures.TestBase, testing.AssertsCompiledSQL):
 
         t = Table(
             'tab1', m,
-            Column('arrval', Array(Integer)),
+            Column('arrval', ARRAY(Integer)),
             Column('data', Integer)
         )
         return t

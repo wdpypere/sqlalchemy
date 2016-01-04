@@ -10,7 +10,7 @@ from sqlalchemy import (
     and_, func, Date, LargeBinary, literal, cast, text, Enum,
     type_coerce, VARCHAR, Time, DateTime, BigInteger, SmallInteger, BOOLEAN,
     BLOB, NCHAR, NVARCHAR, CLOB, TIME, DATE, DATETIME, TIMESTAMP, SMALLINT,
-    INTEGER, DECIMAL, NUMERIC, FLOAT, REAL, Array)
+    INTEGER, DECIMAL, NUMERIC, FLOAT, REAL, ARRAY)
 from sqlalchemy.sql import ddl
 from sqlalchemy.sql import visitors
 from sqlalchemy import inspection
@@ -140,13 +140,15 @@ class AdaptTest(fixtures.TestBase):
         for is_down_adaption, typ, target_adaptions in adaptions():
             if typ in (types.TypeDecorator, types.TypeEngine, types.Variant):
                 continue
-            elif issubclass(typ, Array):
+            elif issubclass(typ, ARRAY):
                 t1 = typ(String)
             else:
                 t1 = typ()
             for cls in target_adaptions:
                 if not issubclass(typ, types.Enum) and \
                         issubclass(cls, types.Enum):
+                    continue
+                if cls.__module__.startswith("test"):
                     continue
 
                 # print("ADAPT %s -> %s" % (t1.__class__, cls))
@@ -190,7 +192,7 @@ class AdaptTest(fixtures.TestBase):
         for typ in self._all_types():
             if typ in (types.TypeDecorator, types.TypeEngine, types.Variant):
                 continue
-            elif issubclass(typ, Array):
+            elif issubclass(typ, ARRAY):
                 t1 = typ(String)
             else:
                 t1 = typ()
@@ -1409,20 +1411,20 @@ class BinaryTest(fixtures.TestBase, AssertsExecutionResults):
 class ArrayTest(fixtures.TestBase):
 
     def _myarray_fixture(self):
-        class MyArray(Array):
+        class MyArray(ARRAY):
             pass
         return MyArray
 
     def test_array_index_map_dimensions(self):
-        col = column('x', Array(Integer, dimensions=3))
+        col = column('x', ARRAY(Integer, dimensions=3))
         is_(
-            col[5].type._type_affinity, Array
+            col[5].type._type_affinity, ARRAY
         )
         eq_(
             col[5].type.dimensions, 2
         )
         is_(
-            col[5][6].type._type_affinity, Array
+            col[5][6].type._type_affinity, ARRAY
         )
         eq_(
             col[5][6].type.dimensions, 1
@@ -1435,8 +1437,8 @@ class ArrayTest(fixtures.TestBase):
         m = MetaData()
         arrtable = Table(
             'arrtable', m,
-            Column('intarr', Array(Integer)),
-            Column('strarr', Array(String)),
+            Column('intarr', ARRAY(Integer)),
+            Column('strarr', ARRAY(String)),
         )
         is_(arrtable.c.intarr[1].type._type_affinity, Integer)
         is_(arrtable.c.strarr[1].type._type_affinity, String)
@@ -1445,11 +1447,11 @@ class ArrayTest(fixtures.TestBase):
         m = MetaData()
         arrtable = Table(
             'arrtable', m,
-            Column('intarr', Array(Integer)),
-            Column('strarr', Array(String)),
+            Column('intarr', ARRAY(Integer)),
+            Column('strarr', ARRAY(String)),
         )
-        is_(arrtable.c.intarr[1:3].type._type_affinity, Array)
-        is_(arrtable.c.strarr[1:3].type._type_affinity, Array)
+        is_(arrtable.c.intarr[1:3].type._type_affinity, ARRAY)
+        is_(arrtable.c.strarr[1:3].type._type_affinity, ARRAY)
 
     def test_array_getitem_slice_type_dialect_level(self):
         MyArray = self._myarray_fixture()
@@ -1459,8 +1461,8 @@ class ArrayTest(fixtures.TestBase):
             Column('intarr', MyArray(Integer)),
             Column('strarr', MyArray(String)),
         )
-        is_(arrtable.c.intarr[1:3].type._type_affinity, Array)
-        is_(arrtable.c.strarr[1:3].type._type_affinity, Array)
+        is_(arrtable.c.intarr[1:3].type._type_affinity, ARRAY)
+        is_(arrtable.c.strarr[1:3].type._type_affinity, ARRAY)
 
         # but the slice returns the actual type
         assert isinstance(arrtable.c.intarr[1:3].type, MyArray)

@@ -54,7 +54,7 @@ from .sql import (
     )
 
 from .types import (
-    Array,
+    ARRAY,
     BIGINT,
     BINARY,
     BLOB,
