@@ -502,6 +502,24 @@ UNIONs with parenthesized SELECT statements is much less common than the
 
 :ticket:`2528`
 
+.. _change_3619:
+
+JSON support added to Core
+--------------------------
+
+As MySQL now has a JSON datatype in addition to the Postgresql JSON datatype,
+the core also gains a :class:`.types.JSON` datatype that is the basis
+for both of these.  Using this type allows access to the "getitem" operator
+as well as the "getpath" operator in a way that is agnostic across Postgresql
+and MySQL.
+
+
+.. seealso::
+
+    :ref:`change_3547`
+
+:ticket:`.3619`
+
 .. _change_3516:
 
 Array support added to Core; new ANY and ALL operators
@@ -975,6 +993,25 @@ emits::
 
 Dialect Improvements and Changes - MySQL
 =============================================
+
+.. _change_3547:
+
+MySQL JSON Support
+------------------
+
+A new type :class:`.mysql.JSON` is added to the MySQL dialect supporting
+the JSON type newly added to MySQL 5.7.   This type provides both persistence
+of JSON as well as rudimentary indexed-access using the ``JSON_EXTRACT``
+function internally.  An indexable JSON column that works across MySQL
+and Postgresql can be achieved by using the :class:`.types.JSON` datatype
+common to both MySQL and Postgresql.
+
+.. seealso::
+
+    :ref:`change_3619`
+
+:ticket:`3547`
+
 
 .. _change_mysql_3216:
 
