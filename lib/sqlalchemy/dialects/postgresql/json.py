@@ -63,11 +63,21 @@ class JSON(sqltypes.JSON):
     """Represent the Postgresql JSON type.
 
     This type is a specialization of the Core-level :class:`.types.JSON`
-    type, and provides additional SQL operators:
+    type.   Be sure to read the documentation for :class:`.types.JSON` for
+    important tips regarding treatment of NULL values and ORM use.
+
+    .. versionchanged:: 1.1 :class:`.postgresql.JSON` is now a Postgresql-
+       specific specialization of the new :class:`.types.JSON` type.
+
+    The operators provided by the Postgresql version of :class:`.JSON`
+    include:
 
     * Index operations (the ``->`` operator)::
 
         data_table.c.data['some key']
+
+        data_table.c.data[5]
+
 
     * Index operations returning text (the ``->>`` operator)::
 
@@ -80,11 +90,11 @@ class JSON(sqltypes.JSON):
 
     * Path index operations (the ``#>`` operator)::
 
-        data_table.c.data[('key_1', 'key_2', ..., 'key_n')]
+        data_table.c.data[('key_1', 'key_2', 5, ..., 'key_n')]
 
     * Path index operations returning text (the ``#>>`` operator)::
 
-        data_table.c.data[('key_1', 'key_2', ..., 'key_n')].astext == \
+        data_table.c.data[('key_1', 'key_2', 5, ..., 'key_n')].astext == \
 'some value'
 
     .. versionchanged:: 1.1  The :meth:`.ColumnElement.cast` operator on
@@ -95,36 +105,6 @@ class JSON(sqltypes.JSON):
     Index operations return an expression object whose type defaults to
     :class:`.JSON` by default, so that further JSON-oriented instructions
     may be called upon the result type.
-
-    The :class:`.JSON` type, when used with the SQLAlchemy ORM, does not
-    detect in-place mutations to the structure.  In order to detect these, the
-    :mod:`sqlalchemy.ext.mutable` extension must be used.  This extension will
-    allow "in-place" changes to the datastructure to produce events which
-    will be detected by the unit of work.  See the example at :class:`.HSTORE`
-    for a simple example involving a dictionary.
-
-    When working with NULL values, the :class:`.JSON` type recommends the
-    use of two specific constants in order to differentiate between a column
-    that evaluates to SQL NULL, e.g. no value, vs. the JSON-encoded string
-    of ``"null"``.   To insert or select against a value that is SQL NULL,
-    use the constant :func:`.null`::
-
-        conn.execute(table.insert(), json_value=null())
-
-    To insert or select against a value that is JSON ``"null"``, use the
-    constant :attr:`.JSON.NULL`::
-
-        conn.execute(table.insert(), json_value=JSON.NULL)
-
-    The :class:`.JSON` type supports a flag
-    :paramref:`.JSON.none_as_null` which when set to True will result
-    in the Python constant ``None`` evaluating to the value of SQL
-    NULL, and when set to False results in the Python constant
-    ``None`` evaluating to the value of JSON ``"null"``.    The Python
-    value ``None`` may be used in conjunction with either
-    :attr:`.JSON.NULL` and :func:`.null` in order to indicate NULL
-    values, but care must be taken as to the value of the
-    :paramref:`.JSON.none_as_null` in these cases.
 
     Custom serializers and deserializers are specified at the dialect level,
     that is using :func:`.create_engine`.  The reason for this is that when
@@ -138,8 +118,6 @@ class JSON(sqltypes.JSON):
 
     When using the psycopg2 dialect, the json_deserializer is registered
     against the database using ``psycopg2.extras.register_default_json``.
-
-    .. versionadded:: 0.9
 
     .. seealso::
 
@@ -173,7 +151,7 @@ class JSON(sqltypes.JSON):
          :attr:`.JSON.Comparator.astext`
          accessor on indexed attributes.  Defaults to :class:`.types.Text`.
 
-         .. versionadded:: 1.1.0
+         .. versionadded:: 1.1
 
          """
         super(JSON, self).__init__(none_as_null=none_as_null)
