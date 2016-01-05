@@ -1521,13 +1521,17 @@ class JSON(Indexable, TypeEngine):
 
     The base :class:`.types.JSON` provides these two operations:
 
-    * Index operations::
+    * Keyed index operations::
 
         data_table.c.data['some key']
 
+    * Integer index operations::
+
+        data_table.c.data[3]
+
     * Path index operations::
 
-        data_table.c.data[('key_1', 'key_2', ..., 'key_n')]
+        data_table.c.data[('key_1', 'key_2', 5, ..., 'key_n')]
 
     Additional operations are available from the dialect-specific versions
     of :class:`.types.JSON`, such as :class:`.postgresql.JSON` and
@@ -1551,6 +1555,7 @@ class JSON(Indexable, TypeEngine):
     of ``"null"``.   To insert or select against a value that is SQL NULL,
     use the constant :func:`.null`::
 
+        from sqlalchemy import null
         conn.execute(table.insert(), json_value=null())
 
     To insert or select against a value that is JSON ``"null"``, use the
@@ -1568,20 +1573,15 @@ class JSON(Indexable, TypeEngine):
     values, but care must be taken as to the value of the
     :paramref:`.JSON.none_as_null` in these cases.
 
-    Custom serializers and deserializers are specified at the dialect level,
-    that is using :func:`.create_engine`.  The reason for this is that when
-    using psycopg2, the DBAPI only allows serializers at the per-cursor
-    or per-connection level.   E.g.::
+    .. seealso::
 
-        engine = create_engine("postgresql://scott:tiger@localhost/test",
-                                json_serializer=my_serialize_fn,
-                                json_deserializer=my_deserialize_fn
-                        )
+        :class:`.postgresql.JSON`
 
-    When using the psycopg2 dialect, the json_deserializer is registered
-    against the database using ``psycopg2.extras.register_default_json``.
+        :class:`.postgresql.JSONB`
 
-    .. versionadded:: 0.9
+        :class:`.mysql.JSON`
+
+    .. versionadded:: 1.1.0
 
 
     """
@@ -1613,7 +1613,7 @@ class JSON(Indexable, TypeEngine):
     def __init__(self, none_as_null=False):
         """Construct a :class:`.types.JSON` type.
 
-        :param none_as_null: if True, persist the value ``None`` as a
+        :param none_as_null=False: if True, persist the value ``None`` as a
          SQL NULL value, not the JSON encoding of ``null``.   Note that
          when this flag is False, the :func:`.null` construct can still
          be used to persist a NULL value::

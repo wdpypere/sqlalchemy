@@ -144,6 +144,9 @@ its exact name in DDL with ``CREATE TABLE`` is issued.
 
 .. autoclass:: INT
 
+.. autoclass:: JSON
+    :members:
+
 
 .. autoclass:: sqlalchemy.types.INTEGER
 

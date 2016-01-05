@@ -508,7 +508,7 @@ JSON support added to Core
 --------------------------
 
 As MySQL now has a JSON datatype in addition to the Postgresql JSON datatype,
-the core also gains a :class:`.types.JSON` datatype that is the basis
+the core also gains a :class:`sqlalchemy.types.JSON` datatype that is the basis
 for both of these.  Using this type allows access to the "getitem" operator
 as well as the "getpath" operator in a way that is agnostic across Postgresql
 and MySQL.
