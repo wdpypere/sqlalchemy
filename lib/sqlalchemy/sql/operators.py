@@ -212,17 +212,14 @@ class custom_op(object):
 
     """
     __name__ = 'custom_op'
-    __visit_name__ = 'custom_op'
 
     def __init__(
             self, opstring, precedence=0, is_comparison=False,
-            natural_self_precedent=False, visit_name=None):
+            natural_self_precedent=False):
         self.opstring = opstring
         self.precedence = precedence
         self.is_comparison = is_comparison
         self.natural_self_precedent = natural_self_precedent
-        if visit_name is not None:
-            self.__visit_name__ = visit_name
 
     def __eq__(self, other):
         return isinstance(other, custom_op) and \

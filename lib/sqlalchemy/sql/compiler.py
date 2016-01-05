@@ -875,8 +875,7 @@ class SQLCompiler(Compiled):
 
     def _get_operator_dispatch(self, operator_, qualifier1, qualifier2):
         attrname = "visit_%s_%s%s" % (
-            operator_.__visit_name__ if operator_.__name__ == 'custom_op'
-            else operator_.__name__, qualifier1,
+            operator_.__name__, qualifier1,
             "_" + qualifier2 if qualifier2 else "")
         return getattr(self, attrname, None)
 
