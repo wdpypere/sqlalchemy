@@ -1581,7 +1581,7 @@ class JSON(Indexable, TypeEngine):
 
         :class:`.mysql.JSON`
 
-    .. versionadded:: 1.1.0
+    .. versionadded:: 1.1
 
 
     """
