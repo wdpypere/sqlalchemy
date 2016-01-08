@@ -368,6 +368,60 @@ the SQL statement. When the :class:`.ResultProxy` is closed, the underlying
 :class:`.Connection` is closed for us, resulting in the
 DBAPI connection being returned to the pool with transactional resources removed.
 
+.. _schema_translating:
+
+Translation of Schema Names
+===========================
+
+To support multi-tenancy applications that distribute common sets of tables
+into multiple schemas, the
+:paramref:`.Connection.execution_options.schema_translate_map`
+execution option may be used to repurpose a set of :class:`.Table` objects
+to render under different schema names without any changes.
+
+Given a table::
+
+    user_table = Table(
+        'user', metadata,
+        Column('id', Integer, primary_key=True),
+        Column('name', String(50))
+    )
+
+The "schema" of this :class:`.Table` as defined by the
+:paramref:`.Table.schema` attribute is ``None``.  The
+:paramref:`.Connection.execution_options.schema_translate_map` can specify
+that all :class:`.Table` objects with a schema of ``None`` would instead
+render the schema as ``user_schema_one``::
+
+    connection = engine.connect().execution_options(
+        schema_translate_map={None: "user_schema_one"})
+
+    result = connection.execute(user_table.select())
+
+The above code will invoke SQL on the database of the form::
+
+    SELECT user_schema_one.user.id, user_schema_one.user.name FROM
+    user_schema.user
+
+That is, the schema name is substituted with our translated name.  The
+map can specify any number of target->destination schemas::
+
+    connection = engine.connect().execution_options(
+        schema_translate_map={
+            None: "user_schema_one",     # no schema name -> "user_schema_one"
+            "special": "special_schema", # schema="special" becomes "special_schema"
+            "public": None               # Table objects with schema="public" will render with no schema
+        })
+
+The :paramref:`.Connection.execution_options.schema_translate_map` parameter
+affects all DDL and SQL constructs generated from the SQL expression language.
+It does **not** impact literal string SQL used via the :func:`.sql.text`
+construct nor via plain strings passed to :meth:`.Connection.execute`.
+
+The feature also takes effect for those features of database reflection,
+as this is necessary at least for the "checkfirst" feature applied when
+a :class:`.Table` object is created or dropped.
+
 .. _engine_disposal:
 
 Engine Disposal
