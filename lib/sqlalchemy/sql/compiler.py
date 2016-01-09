@@ -191,7 +191,11 @@ class Compiled(object):
 
         self.dialect = dialect
         self.bind = bind
-        self.schema_translate_map = schema_translate_map
+        self.preparer = self.dialect.identifier_preparer
+        if schema_translate_map:
+            self.preparer = self.preparer._with_schema_translate(
+                schema_translate_map)
+
         if statement is not None:
             self.statement = statement
             self.can_execute = statement.supports_execution
@@ -203,14 +207,6 @@ class Compiled(object):
         """Produce the internal string representation of this element.
         """
         pass
-
-    @util.memoized_property
-    def preparer(self):
-        preparer = self.dialect.identifier_preparer
-        if self.schema_translate_map:
-            preparer = preparer._with_schema_translate(
-                self.schema_translate_map)
-        return preparer
 
     def _execute_on_connection(self, connection, multiparams, params):
         return connection._execute_compiled(self, multiparams, params)
@@ -665,11 +661,16 @@ class SQLCompiler(Compiled):
         if table is None or not include_table or not table.named_with_column:
             return name
         else:
-            effective_schema = self.preparer._get_effective_schema(table)
+
+            # inlining of preparer._get_effective_schema
+            effective_schema = table.schema
+            if self.preparer.schema_translate_map:
+                effective_schema = self.preparer.schema_translate_map.get(
+                    effective_schema, effective_schema)
 
             if effective_schema:
-                schema_prefix = self.preparer.quote_schema(effective_schema) + \
-                    '.'
+                schema_prefix = self.preparer.quote_schema(
+                    effective_schema) + '.'
             else:
                 schema_prefix = ''
             tablename = table.name
@@ -1829,7 +1830,12 @@ class SQLCompiler(Compiled):
     def visit_table(self, table, asfrom=False, iscrud=False, ashint=False,
                     fromhints=None, use_schema=True, **kwargs):
         if asfrom or ashint:
-            effective_schema = self.preparer._get_effective_schema(table)
+
+            # inlining of preparer._get_effective_schema
+            effective_schema = table.schema
+            if self.preparer.schema_translate_map:
+                effective_schema = self.preparer.schema_translate_map.get(
+                    effective_schema, effective_schema)
 
             if use_schema and effective_schema:
                 ret = self.preparer.quote_schema(effective_schema) + \

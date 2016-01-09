@@ -1578,8 +1578,11 @@ class PGExecutionContext(default.DefaultExecutionContext):
                     name = "%s_%s_seq" % (tab, col)
                     column._postgresql_seq_name = seq_name = name
 
-                effective_schema = self.connection._get_effective_schema(
-                    column.table.schema)
+                if column.table is not None:
+                    effective_schema = self.connection._get_effective_schema(
+                        column.table)
+                else:
+                    effective_schema = None
 
                 if effective_schema is not None:
                     exc = "select nextval('\"%s\".\"%s\"')" % \
