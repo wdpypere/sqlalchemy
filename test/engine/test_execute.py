@@ -805,6 +805,40 @@ class CompiledCacheTest(fixtures.TestBase):
         eq_(compile_mock.call_count, 1)
         eq_(len(cache), 1)
 
+    @testing.requires.schemas
+    @testing.provide_metadata
+    def test_schema_translate_in_key(self):
+        Table(
+            'x', self.metadata, Column('q', Integer))
+        Table(
+            'x', self.metadata, Column('q', Integer),
+            schema=config.test_schema)
+        self.metadata.create_all()
+
+        m = MetaData()
+        t1 = Table('x', m, Column('q', Integer))
+        ins = t1.insert()
+        stmt = select([t1.c.q])
+
+        cache = {}
+        with config.db.connect().execution_options(
+            compiled_cache=cache,
+        ) as conn:
+            conn.execute(ins, {"q": 1})
+            eq_(conn.scalar(stmt), 1)
+
+        with config.db.connect().execution_options(
+            compiled_cache=cache,
+            schema_translate_map={None: config.test_schema}
+        ) as conn:
+            conn.execute(ins, {"q": 2})
+            eq_(conn.scalar(stmt), 2)
+
+        with config.db.connect().execution_options(
+            compiled_cache=cache,
+        ) as conn:
+            eq_(conn.scalar(stmt), 1)
+
 
 class MockStrategyTest(fixtures.TestBase):
 
