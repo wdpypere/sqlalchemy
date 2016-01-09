@@ -414,13 +414,22 @@ map can specify any number of target->destination schemas::
         })
 
 The :paramref:`.Connection.execution_options.schema_translate_map` parameter
-affects all DDL and SQL constructs generated from the SQL expression language.
+affects all DDL and SQL constructs generated from the SQL expression language,
+as derived from the :class:`.Table` or :class:`.Sequence` objects.
 It does **not** impact literal string SQL used via the :func:`.sql.text`
 construct nor via plain strings passed to :meth:`.Connection.execute`.
 
-The feature also takes effect for those features of database reflection,
-as this is necessary at least for the "checkfirst" feature applied when
-a :class:`.Table` object is created or dropped.
+The feature takes effect **only** in those cases where the name of the
+schema is derived directly from that of a :class:`.Table` or :class:`.Sequence`;
+it does not impact methods where a string schema name is passed directly.
+By this pattern, it takes effect within the "can create" / "can drop" checks
+performed by methods such as :meth:`.MetaData.create_all` or
+:meth:`.MetaData.drop_all` are called, and it takes effect when
+using table reflection given a :class:`.Table` object.  However it does
+**not** affect the operations present on the :class:`.Inspector` object,
+as the schema name is passed to these methods explicitly.
+
+.. versionadded:: 1.1
 
 .. _engine_disposal:
 

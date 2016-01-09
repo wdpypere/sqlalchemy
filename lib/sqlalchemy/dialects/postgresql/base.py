@@ -1481,10 +1481,7 @@ class PGIdentifierPreparer(compiler.IdentifierPreparer):
             raise exc.CompileError("Postgresql ENUM type requires a name.")
 
         name = self.quote(type_.name)
-        effective_schema = type_.schema
-        if self.schema_translate_map:
-            effective_schema = self.schema_translate_map.get(
-                effective_schema, effective_schema)
+        effective_schema = self._get_effective_schema(type_)
 
         if not self.omit_schema and use_schema and \
                 effective_schema is not None:

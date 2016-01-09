@@ -142,6 +142,13 @@ class Connection(Connectable):
         c.__dict__ = self.__dict__.copy()
         return c
 
+    def _get_effective_schema(self, table):
+        effective_schema = table.schema
+        if self._schema_translate_map:
+            effective_schema = self._schema_translate_map.get(
+                effective_schema, effective_schema)
+        return effective_schema
+
     def __enter__(self):
         return self
 

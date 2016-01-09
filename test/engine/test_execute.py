@@ -1037,19 +1037,32 @@ class SchemaTranslateTest(fixtures.TestBase, testing.AssertsExecutionResults):
         Table('t3', metadata, Column('x', Integer), schema=None)
         metadata.create_all()
 
-    @testing.provide_metadata
-    def test_inspect(self):
-        self._fixture()
+    def test_ddl_hastable(self):
 
         map_ = {
             None: config.test_schema,
             "foo": config.test_schema, "bar": None}
+
+        metadata = MetaData()
+        Table('t1', metadata, Column('x', Integer))
+        Table('t2', metadata, Column('x', Integer), schema="foo")
+        Table('t3', metadata, Column('x', Integer), schema="bar")
+
         with config.db.connect().execution_options(
-                    schema_translate_map=map_) as conn:
-            insp = inspect(conn)
-            assert insp.has_table('t1')
-            assert not insp.has_table('t3', schema='foo')
-            assert insp.has_table('t3', schema='bar')  # TODO
+                schema_translate_map=map_) as conn:
+            metadata.create_all(conn)
+
+        assert config.db.has_table('t1', schema=config.test_schema)
+        assert config.db.has_table('t2', schema=config.test_schema)
+        assert config.db.has_table('t3', schema=None)
+
+        with config.db.connect().execution_options(
+                schema_translate_map=map_) as conn:
+            metadata.drop_all(conn)
+
+        assert not config.db.has_table('t1', schema=config.test_schema)
+        assert not config.db.has_table('t2', schema=config.test_schema)
+        assert not config.db.has_table('t3', schema=None)
 
     @testing.provide_metadata
     def test_crud(self):

@@ -665,10 +665,8 @@ class SQLCompiler(Compiled):
         if table is None or not include_table or not table.named_with_column:
             return name
         else:
-            effective_schema = table.schema
-            if self.preparer.schema_translate_map:
-                effective_schema = self.preparer.schema_translate_map.get(
-                    effective_schema, effective_schema)
+            effective_schema = self.preparer._get_effective_schema(table)
+
             if effective_schema:
                 schema_prefix = self.preparer.quote_schema(effective_schema) + \
                     '.'
@@ -1831,10 +1829,7 @@ class SQLCompiler(Compiled):
     def visit_table(self, table, asfrom=False, iscrud=False, ashint=False,
                     fromhints=None, use_schema=True, **kwargs):
         if asfrom or ashint:
-            effective_schema = getattr(table, "schema", None)
-            if self.preparer.schema_translate_map:
-                effective_schema = self.preparer.schema_translate_map.get(
-                    effective_schema, effective_schema)
+            effective_schema = self.preparer._get_effective_schema(table)
 
             if use_schema and effective_schema:
                 ret = self.preparer.quote_schema(effective_schema) + \
@@ -2288,10 +2283,7 @@ class DDLCompiler(Compiled):
 
     def _prepared_index_name(self, index, include_schema=False):
         if index.table is not None:
-            effective_schema = index.table.schema
-            if self.preparer.schema_translate_map:
-                effective_schema = self.preparer.schema_translate_map.get(
-                    effective_schema, effective_schema)
+            effective_schema = self.preparer._get_effective_schema(index.table)
         else:
             effective_schema = None
         if include_schema and effective_schema:
@@ -2754,10 +2746,9 @@ class IdentifierPreparer(object):
 
     def format_sequence(self, sequence, use_schema=True):
         name = self.quote(sequence.name)
-        effective_schema = sequence.schema
-        if self.schema_translate_map:
-            effective_schema = self.schema_translate_map.get(
-                effective_schema, effective_schema)
+
+        effective_schema = self._get_effective_schema(sequence)
+
         if (not self.omit_schema and use_schema and
                 effective_schema is not None):
             name = self.quote_schema(effective_schema) + "." + name
@@ -2783,6 +2774,13 @@ class IdentifierPreparer(object):
                 return None
         return self.quote(constraint.name)
 
+    def _get_effective_schema(self, table):
+        effective_schema = table.schema
+        if self.schema_translate_map:
+            effective_schema = self.schema_translate_map.get(
+                effective_schema, effective_schema)
+        return effective_schema
+
     def format_table(self, table, use_schema=True, name=None):
         """Prepare a quoted table and schema name."""
 
@@ -2790,10 +2788,7 @@ class IdentifierPreparer(object):
             name = table.name
         result = self.quote(name)
 
-        effective_schema = getattr(table, "schema", None)
-        if self.schema_translate_map:
-            effective_schema = self.schema_translate_map.get(
-                effective_schema, effective_schema)
+        effective_schema = self._get_effective_schema(table)
 
         if not self.omit_schema and use_schema \
                 and effective_schema:
@@ -2836,10 +2831,7 @@ class IdentifierPreparer(object):
         # ('database', 'owner', etc.) could override this and return
         # a longer sequence.
 
-        effective_schema = getattr(table, "schema", None)
-        if self.schema_translate_map:
-            effective_schema = self.schema_translate_map.get(
-                effective_schema, effective_schema)
+        effective_schema = self._get_effective_schema(table)
 
         if not self.omit_schema and use_schema and \
                 effective_schema:

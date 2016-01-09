@@ -400,7 +400,7 @@ class DefaultDialect(interfaces.Dialect):
 
         if 'schema_translate_map' in opts:
             @event.listens_for(engine, "engine_connect")
-            def set_schema_translate_map(connection):
+            def set_schema_translate_map(connection, branch):
                 connection._schema_translate_map = opts['schema_translate_map']
 
     def set_connection_execution_options(self, connection, opts):
