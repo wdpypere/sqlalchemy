@@ -1004,7 +1004,7 @@ class KeyTargetingTest(fixtures.TablesTest):
         eq_(row.q, "c1")
         assert_raises_message(
             exc.InvalidRequestError,
-            "Ambiguous column name 'b'",
+            "Ambiguous column name 'a'",
             getattr, row, "b"
         )
         assert_raises_message(
