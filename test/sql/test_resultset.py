@@ -664,19 +664,11 @@ class ResultProxyTest(fixtures.TablesTest):
             lambda: row[ua.c.user_id]
         )
 
-        # Unfortunately, this fails -
-        # we'd like
-        # "Could not locate column in row"
-        # to be raised here, but the check for
-        # "common column" in _compare_name_for_result()
-        # has other requirements to be more liberal.
-        # Ultimately the
-        # expression system would need a way to determine
-        # if given two columns in a "proxy" relationship, if they
-        # refer to a different parent table
+        # this now works as of 1.1 issue #3501;
+        # previously this was stuck on "ambiguous column name"
         assert_raises_message(
             exc.InvalidRequestError,
-            "Ambiguous column name",
+            "Could not locate column in row",
             lambda: row[u2.c.user_id]
         )
 

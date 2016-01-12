@@ -85,7 +85,7 @@ except ImportError:
             if index is None:
                 raise exc.InvalidRequestError(
                     "Ambiguous column name '%s' in result set! "
-                    "try 'use_labels' option on select statement." % key)
+                    "try 'use_labels' option on select statement." % obj)
             if processor is not None:
                 return processor(self._row[index])
             else:
@@ -194,14 +194,18 @@ class ResultMetaData(object):
         self.case_sensitive = case_sensitive = dialect.case_sensitive
 
         if context.result_column_struct:
-            result_columns, cols_are_ordered = context.result_column_struct
+            result_columns, cols_are_ordered, textual_ordered = \
+                context.result_column_struct
             num_ctx_cols = len(result_columns)
+            num_metadata_cols = len(metadata)
         else:
+            textual_ordered = False
             num_ctx_cols = None
 
         if num_ctx_cols and \
                 cols_are_ordered and \
-                num_ctx_cols == len(metadata):
+                not textual_ordered and \
+                num_ctx_cols == num_metadata_cols:
             # case 1 - SQL expression statement, number of columns
             # in result matches number of cols in compiled.  This is the
             # vast majority case for SQL expression constructs.  In this
@@ -223,6 +227,7 @@ class ResultMetaData(object):
             self.keys = [
                 elem[0] for elem in result_columns
             ]
+
         else:
             # case 2 - raw string, or number of columns in result does
             # not match number of cols in compiled.  The raw string case
@@ -235,13 +240,16 @@ class ResultMetaData(object):
             # In all these cases we fall back to the "named" approach
             # that SQLAlchemy has used up through 0.9.
 
-            if num_ctx_cols:
+            if num_ctx_cols and not textual_ordered:
                 result_map = self._create_result_map(
                     result_columns, case_sensitive)
 
             raw = []
             self.keys = []
             untranslated = None
+            if textual_ordered:
+                seen = set()
+
             for idx, rec in enumerate(metadata):
                 colname = rec[0]
                 coltype = rec[1]
@@ -259,7 +267,20 @@ class ResultMetaData(object):
                 if not case_sensitive:
                     colname = colname.lower()
 
-                if num_ctx_cols:
+                if textual_ordered:
+                    if idx < num_ctx_cols:
+                        ctx_rec = result_columns[idx]
+                        obj = ctx_rec[2]
+                        mapped_type = ctx_rec[3]
+                        if obj[0] in seen:
+                            raise exc.InvalidRequestError(
+                                "Duplicate column expression requested "
+                                "in textual SQL: %r" % obj[0])
+                        seen.add(obj[0])
+                    else:
+                        mapped_type = typemap.get(coltype, sqltypes.NULLTYPE)
+                        obj = None
+                elif num_ctx_cols:
                     try:
                         ctx_rec = result_map[colname]
                     except KeyError:
@@ -295,6 +316,17 @@ class ResultMetaData(object):
                 for elem in raw
             ])
 
+            if textual_ordered:
+                if num_ctx_cols > len(metadata):
+                    util.warn(
+                        "Number of columns in textual SQL (%d) is "
+                        "smaller than number of columns requested (%d)" % (
+                            num_ctx_cols, len(metadata)
+                        ))
+
+                # TODO: check for dupes
+                pass
+
             # if by-primary-string dictionary smaller (or bigger?!) than
             # number of columns, assume we have dupes, rewrite
             # dupe records with "None" for index which results in
@@ -304,7 +336,7 @@ class ResultMetaData(object):
                 for rec in raw:
                     key = rec[1]
                     if key in seen:
-                        by_key[key] = (None, by_key[key][1], None)
+                        by_key[key] = (None, key, None)
                     seen.add(key)
 
             # update keymap with secondary "object"-based keys
@@ -428,7 +460,7 @@ class ResultMetaData(object):
         if index is None:
             raise exc.InvalidRequestError(
                 "Ambiguous column name '%s' in result set! "
-                "try 'use_labels' option on select statement." % key)
+                "try 'use_labels' option on select statement." % obj)
 
         return operator.itemgetter(index)
 

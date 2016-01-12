@@ -1529,13 +1529,19 @@ class TextClause(Executable, ClauseElement):
 
         """
 
-        input_cols = [
+        positional_input_cols = [
             ColumnClause(col.key, types.pop(col.key))
             if col.key in types
             else col
             for col in cols
-        ] + [ColumnClause(key, type_) for key, type_ in types.items()]
-        return selectable.TextAsFrom(self, input_cols)
+        ]
+        keyed_input_cols = [
+            ColumnClause(key, type_) for key, type_ in types.items()]
+
+        return selectable.TextAsFrom(
+            self,
+            positional_input_cols + keyed_input_cols,
+            positional=bool(positional_input_cols) and not keyed_input_cols)
 
     @property
     def type(self):
