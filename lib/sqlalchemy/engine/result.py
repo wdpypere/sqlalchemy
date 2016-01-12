@@ -84,8 +84,8 @@ except ImportError:
                     raise
             if index is None:
                 raise exc.InvalidRequestError(
-                    "Ambiguous column name '%s' in result set! "
-                    "try 'use_labels' option on select statement." % obj)
+                    "Ambiguous column name '%s' in "
+                    "result set column descriptions" % obj)
             if processor is not None:
                 return processor(self._row[index])
             else:
@@ -190,6 +190,7 @@ class ResultMetaData(object):
         context = parent.context
         dialect = context.dialect
         self.case_sensitive = dialect.case_sensitive
+        self.matched_on_name = False
 
         if context.result_column_struct:
             result_columns, cols_are_ordered, textual_ordered = \
@@ -215,12 +216,16 @@ class ResultMetaData(object):
         # views like __iter__ and slices
         self._processors = [elem[3] for elem in raw]
 
+        # keymap by primary string...
+        by_key = dict([
+            (elem[2], (elem[3], elem[4], elem[0]))
+            for elem in raw
+        ])
+
+        # for compiled SQL constructs, copy additional lookup keys into
+        # the key lookup map, such as Column objects, labels,
+        # column keys and other names
         if num_ctx_cols:
-            # keymap by primary string...
-            by_key = dict([
-                (elem[2], (elem[3], elem[4], elem[0]))
-                for elem in raw
-            ])
 
             # if by-primary-string dictionary smaller (or bigger?!) than
             # number of columns, assume we have dupes, rewrite
@@ -231,30 +236,47 @@ class ResultMetaData(object):
                 for rec in raw:
                     key = rec[1]
                     if key in seen:
+                        # this is an "ambiguous" element, replacing
+                        # the full record in the map
                         by_key[key] = (None, key, None)
                     seen.add(key)
 
-            # update keymap with secondary "object"-based keys
-            self._keymap.update([
-                (obj_elem, by_key[elem[2]])
-                for elem in raw if elem[4]
-                for obj_elem in elem[4]
-            ])
-
-            # update keymap with primary string names taking
-            # precedence
-            self._keymap.update(by_key)
-        else:
-            self._keymap.update([
-                (elem[2], (elem[3], elem[4], elem[0]))
-                for elem in raw
-            ])
-            # update keymap with "translated" names (sqlite-only thing)
-            if context._translate_colname:
+                # copy secondary elements from compiled columns
+                # into self._keymap, write in the potentially "ambiguous"
+                # element
                 self._keymap.update([
-                    (elem[5], self._keymap[elem[2]])
-                    for elem in raw if elem[5]
+                    (obj_elem, by_key[elem[2]])
+                    for elem in raw if elem[4]
+                    for obj_elem in elem[4]
                 ])
+
+                # if we did a pure positional match, then reset the
+                # original "expression element" back to the "unambiguous"
+                # entry
+                if not self.matched_on_name:
+                    self._keymap.update([
+                        (elem[4][0], (elem[3], elem[4], elem[0]))
+                        for elem in raw if elem[4]
+                    ])
+            else:
+                # no dupes - copy secondary elements from compiled
+                # columns into self._keymap
+                self._keymap.update([
+                    (obj_elem, (elem[3], elem[4], elem[0]))
+                    for elem in raw if elem[4]
+                    for obj_elem in elem[4]
+                ])
+
+        # update keymap with primary string names taking
+        # precedence
+        self._keymap.update(by_key)
+
+        # update keymap with "translated" names (sqlite-only thing)
+        if not num_ctx_cols and context._translate_colname:
+            self._keymap.update([
+                (elem[5], self._keymap[elem[2]])
+                for elem in raw if elem[5]
+            ])
 
     def _merge_cursor_description(
             self, context, cursor_description, result_columns,
@@ -437,6 +459,7 @@ class ResultMetaData(object):
         case_sensitive = dialect.case_sensitive
         result_map = self._create_result_map(result_columns, case_sensitive)
 
+        self.matched_on_name = True
         for idx, colname, untranslated, coltype in \
                 self._colnames_from_description(context, cursor_description):
             try:
@@ -539,8 +562,8 @@ class ResultMetaData(object):
 
         if index is None:
             raise exc.InvalidRequestError(
-                "Ambiguous column name '%s' in result set! "
-                "try 'use_labels' option on select statement." % obj)
+                "Ambiguous column name '%s' in "
+                "result set column descriptions" % obj)
 
         return operator.itemgetter(index)
 
@@ -553,6 +576,7 @@ class ResultMetaData(object):
             ),
             'keys': self.keys,
             "case_sensitive": self.case_sensitive,
+            "matched_on_name": self.matched_on_name
         }
 
     def __setstate__(self, state):
@@ -566,6 +590,7 @@ class ResultMetaData(object):
             keymap[key] = (None, None, index)
         self.keys = state['keys']
         self.case_sensitive = state['case_sensitive']
+        self.matched_on_name = state['matched_on_name']
         self._echo = False
 
 
