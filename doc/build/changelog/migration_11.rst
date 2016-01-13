@@ -445,6 +445,59 @@ will not have much impact on the behavior of the column during an INSERT.
 
 :ticket:`3216`
 
+.. _change_3501:
+
+Positional matching of result columns when using textual SQL
+------------------------------------------------------------
+
+A series of improvements were made to the :class:`.ResultProxy` system
+in the 1.0 series as part of :ticket:`918`, which reorganizes the internals
+to match cursor-bound result columns with table/ORM metadata positionally,
+rather than by matching names, for compiled SQL constructs that contain full
+information about the result rows to be returned.   This allows a dramatic savings
+on Python overhead as well as much greater accuracy in linking ORM and Core
+SQL expressions to result rows.  In 1.1, this reorganization has been taken
+much further internally, and also has been made available to pure-text SQL
+constructs via the use of the recently added :meth:`.TextClause.columns` method.
+
+The method now accepts column-based arguments positionally which will be matched
+to the target result set positionally as well.  The key advantage here is that
+textual SQL can now be linked to an ORM-level result set without the need to
+deal with ambiguous or duplicate column names, or with having to match labeling
+schemes to ORM-level column names.  All that's needed now is the position::
+
+
+    from sqlalchemy import text
+    stmt = text("SELECT users.id, addresses.id, users.id, "
+         "users.name, addresses.email_address AS email "
+         "FROM users JOIN addresses ON users.id=addresses.user_id "
+         "WHERE users.id = 1").columns(
+            User.id,
+            Address.id,
+            Address.user_id,
+            User.name,
+            Address.email_address
+         )
+
+    query = session.query(User).from_statement(text).\
+        options(contains_eager(User.addresses))
+    result = query.all()
+
+Above, the textual SQL contains the column "id" three times, which would
+normally be ambiguous.  Using the new feature, we can apply the mapped
+columns from the ``User`` and ``Address`` class directly, even linking
+the ``Address.user_id`` column to the ``users.id`` column in textual SQL
+for fun, and the :class:`.Query` object will receive rows that are correctly
+targetable as needed, including for an eager load.
+
+.. seealso::
+
+    :ref:`sqlexpression_text_columns`
+
+    :ref:`behavior_change_3501`
+
+:ticket:`3501`
+
 .. _change_2528:
 
 A UNION or similar of SELECTs with LIMIT/OFFSET/ORDER BY now parenthesizes the embedded selects
@@ -896,6 +949,45 @@ Key Behavioral Changes - ORM
 Key Behavioral Changes - Core
 =============================
 
+.. _behavior_change_3501:
+
+The new behavior of the :meth:`.TextClause.columns` method is that when
+columns are passed positionally only, they are linked to the ultimate result set
+columns positionally, and no longer on name.   Therefore an application that was
+using this very recently added method by passing :class:`.Column` objects
+to it positionally must ensure that the position of those :class:`.Column`
+objects matches the position in which these columns are stated in the
+textual SQL.
+
+E.g., code like the following::
+
+    stmt = text("SELECT id, name, description FROM table")
+
+    # no longer matches by name
+    stmt = stmt.columns(my_table.c.name, my_table.c.description, my_table.c.id)
+
+Would no longer work as expected; the order of the columns given is now
+significant::
+
+    # correct version
+    stmt = stmt.columns(my_table.c.id, my_table.c.name, my_table.c.description)
+
+Possibly more likely, a statement that worked like this::
+
+    stmt = text("SELECT * FROM table")
+    stmt = stmt.columns(my_table.c.id, my_table.c.name, my_table.c.description)
+
+is now slightly risky, as the "*" specification will generally deliver columns
+in the order in which they are present in the table itself.  If the structure
+of the table changes due to a migration, this ordering may no longer be the same.
+Therefore when using :meth:`.TextClause.columns`, it's advised to list out
+the desired columns explicitly, though it's no longer necessary to worry about
+duplicate names or names matching.
+
+
+.. seealso::
+
+    :ref:`change_3501`
 
 Dialect Improvements and Changes - Postgresql
 =============================================

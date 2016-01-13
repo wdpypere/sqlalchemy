@@ -814,6 +814,8 @@ or special SQL-side processing provided by the datatype.
 
     :meth:`.TextClause.bindparams` - full method description
 
+.. _sqlexpression_text_columns:
+
 Specifying Result-Column Behaviors
 ----------------------------------------------
 

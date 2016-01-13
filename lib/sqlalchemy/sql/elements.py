@@ -1528,8 +1528,6 @@ class TextClause(Executable, ClauseElement):
         the result set will match to those columns positionally, meaning the
         name or origin of the column in the textual SQL doesn't matter::
 
-            stmt = text("SELECT users.id, addresses.id, users.name, )
-
             stmt = text("SELECT users.id, addresses.id, users.id, "
                  "users.name, addresses.email_address AS email "
                  "FROM users JOIN addresses ON users.id=addresses.user_id "
