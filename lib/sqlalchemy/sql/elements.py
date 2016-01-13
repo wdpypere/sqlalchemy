@@ -1486,9 +1486,17 @@ class TextClause(Executable, ClauseElement):
                         mytable.join(stmt, mytable.c.name == stmt.c.name)
                     ).where(stmt.c.id > 5)
 
-        Above, we used untyped :func:`.column` elements.  These can also have
-        types specified, which will impact how the column behaves in
-        expressions as well as determining result set behavior::
+        Above, we pass a series of :func:`.column` elements to the
+        :meth:`.TextClause.columns` method positionally.  These :func:`.column`
+        elements now become first class elements upon the :attr:`.TextAsFrom.c`
+        column collection, just like any other selectable.
+
+        The column expressions we pass to :meth:`.TextClause.columns` may
+        also be typed; when we do so, these :class:`.TypeEngine` objects become
+        the effective return type of the column, so that SQLAlchemy's
+        result-set-processing systems may be used on the return values.
+        This is often needed for types such as date or boolean types, as well
+        as for unicode processing on some dialect configurations::
 
             stmt = text("SELECT id, name, timestamp FROM some_table")
             stmt = stmt.columns(
@@ -1500,9 +1508,8 @@ class TextClause(Executable, ClauseElement):
             for id, name, timestamp in connection.execute(stmt):
                 print(id, name, timestamp)
 
-        Keyword arguments allow just the names and types of columns to be
-        specified, where the :func:`.column` elements will be generated
-        automatically::
+        As a shortcut to the above syntax, keyword arguments referring to
+        types alone may be used, if only type conversion is needed::
 
             stmt = text("SELECT id, name, timestamp FROM some_table")
             stmt = stmt.columns(
@@ -1513,6 +1520,33 @@ class TextClause(Executable, ClauseElement):
 
             for id, name, timestamp in connection.execute(stmt):
                 print(id, name, timestamp)
+
+        The positional form of :meth:`.TextClause.columns` also provides
+        the unique feature of **positional column targeting**, which is
+        particularly useful when using the ORM with complex textual queries.
+        If we specify the columns from our model to :meth:`.TextClause.columns`,
+        the result set will match to those columns positionally, meaning the
+        name or origin of the column in the textual SQL doesn't matter::
+
+            stmt = text("SELECT users.id, addresses.id, users.name, )
+
+            stmt = text("SELECT users.id, addresses.id, users.id, "
+                 "users.name, addresses.email_address AS email "
+                 "FROM users JOIN addresses ON users.id=addresses.user_id "
+                 "WHERE users.id = 1").columns(
+                    User.id,
+                    Address.id,
+                    Address.user_id,
+                    User.name,
+                    Address.email_address
+                 )
+
+            query = session.query(User).from_statement(stmt).options(
+                contains_eager(User.addresses))
+
+        .. versionadded:: 1.1 the :meth:`.TextClause.columns` method now
+           offers positional column targeting in the result set when
+           the column expressions are passed purely positionally.
 
         The :meth:`.TextClause.columns` method provides a direct
         route to calling :meth:`.FromClause.alias` as well as
@@ -1526,6 +1560,7 @@ class TextClause(Executable, ClauseElement):
            fully featured "selectable" construct using the
            :meth:`.TextClause.columns` method.  This method supersedes the
            ``typemap`` argument to :func:`.text`.
+
 
         """
 

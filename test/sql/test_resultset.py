@@ -1294,5 +1294,3 @@ class PositionalTextTest(fixtures.TablesTest):
             "Could not locate column in row for column 'text1.a'",
             lambda: row[text1.c.a]
         )
-
-
