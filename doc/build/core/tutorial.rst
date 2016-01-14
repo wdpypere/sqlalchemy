@@ -805,7 +805,7 @@ using the :meth:`.TextClause.bindparams` method::
 The parameters can also be explicitly typed::
 
     stmt = stmt.bindparams(bindparam("x", String), bindparam("y", String))
-    result = conn.execute(stmt, {x:"m", y:"z"})
+    result = conn.execute(stmt, {"x": "m", "y": "z"})
 
 Typing for bound parameters is necessary when the type requires Python-side
 or special SQL-side processing provided by the datatype.

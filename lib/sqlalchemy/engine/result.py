@@ -186,6 +186,10 @@ class ResultMetaData(object):
     """Handle cursor.description, applying additional info from an execution
     context."""
 
+    __slots__ = (
+        '_keymap', 'case_sensitive', 'matched_on_name',
+        '_processors', 'keys', '_orig_processors')
+
     def __init__(self, parent, cursor_description):
         context = parent.context
         dialect = context.dialect
@@ -252,7 +256,8 @@ class ResultMetaData(object):
 
                 # if we did a pure positional match, then reset the
                 # original "expression element" back to the "unambiguous"
-                # entry
+                # entry.  This is a new behavior in 1.1 which impacts
+                # TextAsFrom but also straight compiled SQL constructs.
                 if not self.matched_on_name:
                     self._keymap.update([
                         (elem[4][0], (elem[3], elem[4], elem[0]))
@@ -591,7 +596,6 @@ class ResultMetaData(object):
         self.keys = state['keys']
         self.case_sensitive = state['case_sensitive']
         self.matched_on_name = state['matched_on_name']
-        self._echo = False
 
 
 class ResultProxy(object):

@@ -447,8 +447,8 @@ will not have much impact on the behavior of the column during an INSERT.
 
 .. _change_3501:
 
-Positional matching of result columns when using textual SQL
-------------------------------------------------------------
+ResultSet column matching enhancements; positional column setup for textual SQL
+-------------------------------------------------------------------------------
 
 A series of improvements were made to the :class:`.ResultProxy` system
 in the 1.0 series as part of :ticket:`918`, which reorganizes the internals
@@ -457,14 +457,20 @@ rather than by matching names, for compiled SQL constructs that contain full
 information about the result rows to be returned.   This allows a dramatic savings
 on Python overhead as well as much greater accuracy in linking ORM and Core
 SQL expressions to result rows.  In 1.1, this reorganization has been taken
-much further internally, and also has been made available to pure-text SQL
+further internally, and also has been made available to pure-text SQL
 constructs via the use of the recently added :meth:`.TextClause.columns` method.
 
-The method now accepts column-based arguments positionally which will be matched
-to the target result set positionally as well.  The key advantage here is that
-textual SQL can now be linked to an ORM-level result set without the need to
-deal with ambiguous or duplicate column names, or with having to match labeling
-schemes to ORM-level column names.  All that's needed now is the position::
+TextAsFrom.columns() now works positionally
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :meth:`.TextClause.columns` method, added in 0.9, accepts column-based arguments
+positionally; in 1.1, when all columns are passed positionally, the correlation
+of these columns to the ultimate result set is also performed positionally.
+The key advantage here is that textual SQL can now be linked to an ORM-
+level result set without the need to deal with ambiguous or duplicate column
+names, or with having to match labeling schemes to ORM-level column names.  All
+that's needed now is the same ordering of columns within the textual SQL
+and the column arguments passed to :meth:`.TextClause.columns`::
 
 
     from sqlalchemy import text
@@ -490,11 +496,66 @@ the ``Address.user_id`` column to the ``users.id`` column in textual SQL
 for fun, and the :class:`.Query` object will receive rows that are correctly
 targetable as needed, including for an eager load.
 
+This change is **backwards incompatible** with code that passes the columns
+to the method with a different ordering than is present in the textual statement.
+It is hoped that this impact will be low due to the fact that this
+method has always been documented illustrating the columns being passed in the same order as that of the
+textual SQL statement, as would seem intuitive, even though the internals
+weren't checking for this.  The method itself was only added as of 0.9 in
+any case and may not yet have widespread use.  Notes on exactly how to handle
+this behavioral change for applications using it are at :ref:`behavior_change_3501`.
+
 .. seealso::
 
-    :ref:`sqlexpression_text_columns`
+    :ref:`sqlexpression_text_columns` - in the Core tutorial
 
     :ref:`behavior_change_3501`
+
+Positional matching is trusted over name-based matching for Core/ORM SQL constructs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Another aspect of this change is that the rules for matching columns have also been modified
+to rely upon "positional" matching more fully for compiled SQL constructs
+as well.   Given a statement like the following::
+
+    ua = users.alias('ua')
+    stmt = select([users.c.user_id, ua.c.user_id])
+
+The above statement will compile to::
+
+    SELECT users.user_id, ua.user_id FROM users, users AS ua
+
+In 1.0, the above statement when executed would be matched to its original
+compiled construct using positional matching, however because the statement
+contains the ``'user_id'`` label duplicated, the "ambiguous column" rule
+would still get involved and prevent the columns from being fetched from a row.
+As of 1.1, the "ambiguous column" rule does not affect an exact match from
+a column construct to the SQL column, which is what the ORM uses to
+fetch columns::
+
+    result = conn.execute(stmt)
+    row = result.first()
+
+    # these both match positionally, so no error
+    user_id = row[users.c.user_id]
+    ua_id = row[ua.c.user_id]
+
+    # this still raises, however
+    user_id = row['user_id']
+
+Much less likely to get an "ambiguous column" error message
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As part of this change, the wording of the error message ``Ambiguous column
+name '<name>' in result set! try 'use_labels' option on select statement.``
+has been dialed back; as this message should now be extremely rare when using
+the ORM or Core compiled SQL constructs, it merely states
+``Ambiguous column name '<name>' in result set column descriptions``, and
+only when a result column is retrieved using the string name that is actually
+ambiguous, e.g. ``row['user_id']`` in the above example.  It also now refers
+to the actual ambiguous name from the rendered SQL statement itself,
+rather than indicating the key or name that was local to the construct being
+used for the fetch.
 
 :ticket:`3501`
 
@@ -951,10 +1012,20 @@ Key Behavioral Changes - Core
 
 .. _behavior_change_3501:
 
-The new behavior of the :meth:`.TextClause.columns` method is that when
-columns are passed positionally only, they are linked to the ultimate result set
-columns positionally, and no longer on name.   Therefore an application that was
-using this very recently added method by passing :class:`.Column` objects
+TextClause.columns() will match columns positionally, not by name, when passed positionally
+-------------------------------------------------------------------------------------------
+
+The new behavior of the :meth:`.TextClause.columns` method, which itself
+was recently added as of the 0.9 series, is that when
+columns are passed positionally without any additional keyword arguments,
+they are linked to the ultimate result set
+columns positionally, and no longer on name.   It is hoped that the impact
+of this change will be low due to the fact that the method has always been documented
+illustrating the columns being passed in the same order as that of the
+textual SQL statement, as would seem intuitive, even though the internals
+weren't checking for this.
+
+An application that is using this method by passing :class:`.Column` objects
 to it positionally must ensure that the position of those :class:`.Column`
 objects matches the position in which these columns are stated in the
 textual SQL.
@@ -979,11 +1050,10 @@ Possibly more likely, a statement that worked like this::
 
 is now slightly risky, as the "*" specification will generally deliver columns
 in the order in which they are present in the table itself.  If the structure
-of the table changes due to a migration, this ordering may no longer be the same.
+of the table changes due to schema changes, this ordering may no longer be the same.
 Therefore when using :meth:`.TextClause.columns`, it's advised to list out
-the desired columns explicitly, though it's no longer necessary to worry about
-duplicate names or names matching.
-
+the desired columns explicitly in the textual SQL, though it's no longer
+necessary to worry about the names themselves in the textual SQL.
 
 .. seealso::
 

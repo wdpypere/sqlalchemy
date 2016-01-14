@@ -607,8 +607,8 @@ class ResultProxyTest(fixtures.TablesTest):
 
         # pure positional targeting; users.c.user_id
         # and addresses.c.user_id are known!
+        # works as of 1.1 issue #3501
         eq_(r[users.c.user_id], 1)
-
         eq_(r[addresses.c.user_id], None)
 
         # try to trick it - fake_table isn't in the result!
