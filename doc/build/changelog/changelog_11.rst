@@ -39,7 +39,9 @@
 
         .. seealso::
 
-            :ref:`change_3501`
+            :ref:`change_3501` - feature overview
+
+            :ref:`behavior_change_3501` - backwards compatibility remarks
 
     .. change::
         :tags: feature, engine

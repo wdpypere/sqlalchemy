@@ -468,7 +468,7 @@ positionally; in 1.1, when all columns are passed positionally, the correlation
 of these columns to the ultimate result set is also performed positionally.
 The key advantage here is that textual SQL can now be linked to an ORM-
 level result set without the need to deal with ambiguous or duplicate column
-names, or with having to match labeling schemes to ORM-level column names.  All
+names, or with having to match labeling schemes to ORM-level labeling schemes.  All
 that's needed now is the same ordering of columns within the textual SQL
 and the column arguments passed to :meth:`.TextClause.columns`::
 
@@ -509,7 +509,7 @@ this behavioral change for applications using it are at :ref:`behavior_change_35
 
     :ref:`sqlexpression_text_columns` - in the Core tutorial
 
-    :ref:`behavior_change_3501`
+    :ref:`behavior_change_3501` - backwards compatibility remarks
 
 Positional matching is trusted over name-based matching for Core/ORM SQL constructs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

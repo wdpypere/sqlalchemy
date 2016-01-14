@@ -1360,6 +1360,12 @@ class TextClause(Executable, ClauseElement):
           .. deprecated:: 0.9.0 the :meth:`.TextClause.columns` method
              supersedes the ``typemap`` argument to :func:`.text`.
 
+        .. seealso::
+
+            :ref:`sqlexpression_text` - in the Core tutorial
+
+            :ref:`orm_tutorial_literal_sql` - in the ORM tutorial
+
         """
         stmt = TextClause(text, bind=bind)
         if bindparams:
