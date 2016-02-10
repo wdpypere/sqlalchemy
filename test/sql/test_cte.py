@@ -8,7 +8,7 @@ from sqlalchemy.exc import CompileError
 
 class CTETest(fixtures.TestBase, AssertsCompiledSQL):
 
-    __dialect__ = 'default'
+    __dialect__ = 'default_enhanced'
 
     def test_nonrecursive(self):
         orders = table('orders',
