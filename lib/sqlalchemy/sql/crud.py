@@ -35,7 +35,9 @@ def _setup_crud_params(compiler, stmt, local_stmt_type, **kw):
     restore_isupdate = compiler.isupdate
     restore_isdelete = compiler.isdelete
 
-    should_restore = restore_isinsert or restore_isupdate or restore_isdelete
+    should_restore = (
+        restore_isinsert or restore_isupdate or restore_isdelete
+    ) or len(compiler.stack) > 1
 
     if local_stmt_type is ISINSERT:
         compiler.isupdate = False
@@ -50,7 +52,7 @@ def _setup_crud_params(compiler, stmt, local_stmt_type, **kw):
         assert False, "ISINSERT, ISUPDATE, or ISDELETE expected"
 
     try:
-        if compiler.isupdate or compiler.isinsert:
+        if local_stmt_type in (ISINSERT, ISUPDATE):
             return _get_crud_params(compiler, stmt, **kw)
     finally:
         if should_restore:

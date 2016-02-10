@@ -1867,7 +1867,7 @@ class SQLCompiler(Compiled):
             )
         return dialect_hints, table_text
 
-    def visit_insert(self, insert_stmt, **kw):
+    def visit_insert(self, insert_stmt, asfrom=False, **kw):
         toplevel = not self.stack
 
         self.stack.append(
@@ -1921,12 +1921,14 @@ class SQLCompiler(Compiled):
             text += " (%s)" % ', '.join([preparer.format_column(c[0])
                                          for c in crud_params_single])
 
-        if insert_stmt._returning:
+        if self.returning or insert_stmt._returning:
             returning_clause = self.returning_clause(
-                insert_stmt, insert_stmt._returning)
+                insert_stmt, self.returning or insert_stmt._returning)
 
             if self.returning_precedes_values:
                 text += " " + returning_clause
+        else:
+            returning_clause = None
 
         if insert_stmt.select is not None:
             text += " %s" % self.process(self._insert_from_select, **kw)
@@ -1945,7 +1947,7 @@ class SQLCompiler(Compiled):
             text += " VALUES (%s)" % \
                 ', '.join([c[1] for c in crud_params])
 
-        if insert_stmt._returning and not self.returning_precedes_values:
+        if returning_clause and not self.returning_precedes_values:
             text += " " + returning_clause
 
         if self.ctes and toplevel:
@@ -1953,7 +1955,10 @@ class SQLCompiler(Compiled):
 
         self.stack.pop(-1)
 
-        return text
+        if asfrom:
+            return "(" + text + ")"
+        else:
+            return text
 
     def update_limit_clause(self, update_stmt):
         """Provide a hook for MySQL to add LIMIT to the UPDATE"""
@@ -1985,7 +1990,7 @@ class SQLCompiler(Compiled):
                                  fromhints=from_hints, **kw)
             for t in extra_froms)
 
-    def visit_update(self, update_stmt, **kw):
+    def visit_update(self, update_stmt, asfrom=False, **kw):
         toplevel = not self.stack
 
         self.stack.append(
@@ -2024,10 +2029,10 @@ class SQLCompiler(Compiled):
             '=' + c[1] for c in crud_params
         )
 
-        if update_stmt._returning:
+        if self.returning or update_stmt._returning:
             if self.returning_precedes_values:
                 text += " " + self.returning_clause(
-                    update_stmt, update_stmt._returning)
+                    update_stmt, self.returning or update_stmt._returning)
 
         if extra_froms:
             extra_from_text = self.update_from_clause(
@@ -2047,22 +2052,26 @@ class SQLCompiler(Compiled):
         if limit_clause:
             text += " " + limit_clause
 
-        if update_stmt._returning and not self.returning_precedes_values:
+        if (self.returning or update_stmt._returning) and \
+                not self.returning_precedes_values:
             text += " " + self.returning_clause(
-                update_stmt, update_stmt._returning)
+                update_stmt, self.returning or update_stmt._returning)
 
         if self.ctes and toplevel:
             text = self._render_cte_clause() + text
 
         self.stack.pop(-1)
 
-        return text
+        if asfrom:
+            return "(" + text + ")"
+        else:
+            return text
 
     @util.memoized_property
     def _key_getters_for_crud_column(self):
         return crud._key_getters_for_crud_column(self, self.statement)
 
-    def visit_delete(self, delete_stmt, **kw):
+    def visit_delete(self, delete_stmt, asfrom=False, **kw):
         toplevel = not self.stack
 
         self.stack.append({'correlate_froms': set([delete_stmt.table]),
@@ -2106,7 +2115,10 @@ class SQLCompiler(Compiled):
 
         self.stack.pop(-1)
 
-        return text
+        if asfrom:
+            return "(" + text + ")"
+        else:
+            return text
 
     def visit_savepoint(self, savepoint_stmt):
         return "SAVEPOINT %s" % self.preparer.format_savepoint(savepoint_stmt)
