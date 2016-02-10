@@ -1,6 +1,6 @@
 from sqlalchemy.testing import fixtures
 from sqlalchemy.testing import AssertsCompiledSQL, assert_raises_message
-from sqlalchemy.sql import table, column, select, func, literal
+from sqlalchemy.sql import table, column, select, func, literal, exists
 from sqlalchemy.dialects import mssql
 from sqlalchemy.engine import default
 from sqlalchemy.exc import CompileError
@@ -491,4 +491,37 @@ class CTETest(fixtures.TestBase, AssertsCompiledSQL):
             'FROM "order") pg suffix  SELECT "order"."order" FROM "order", '
             'regional_sales WHERE "order"."order" > regional_sales."order"',
             dialect='postgresql'
+        )
+
+    def test_upsert(self):
+        orders = table(
+            'orders',
+            column('region'),
+            column('amount'),
+            column('product'),
+            column('quantity')
+        )
+
+        upsert = (
+            orders.update()
+            .where(orders.c.region == 'Region1')
+            .values(amount=1.0, product='Product1', quantity=1)
+            .returning(*(orders.c._all_columns)).cte('upsert'))
+
+        insert = orders.insert().from_select(
+            orders.c.keys(),
+            select([
+                literal('Region1'), literal(1.0),
+                literal('Product1'), literal(1)
+            ]).where(exists(upsert.select()))
+        )
+
+        self.assert_compile(
+            insert,
+            "WITH upsert AS (UPDATE orders SET amount = 1.0, "
+            "product = 'Product1', quantity = 1 WHERE region = 'Region1' "
+            "RETURNING region, amount, product, quantity) "
+            "INSERT INTO orders (region, amount, product, quantity) "
+            "SELECT ('Region1', 1.0, 'Product1', 1) WHERE NOT EXISTS "
+            "(SELECT * FROM upsert)"
         )

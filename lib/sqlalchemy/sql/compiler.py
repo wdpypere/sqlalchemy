@@ -1972,8 +1972,8 @@ class SQLCompiler(Compiled):
         MySQL overrides this.
 
         """
-        return from_table._compiler_dispatch(self, asfrom=True,
-                                             iscrud=True, **kw)
+        kw['asfrom'] = True
+        return from_table._compiler_dispatch(self, iscrud=True, **kw)
 
     def update_from_clause(self, update_stmt,
                            from_table, extra_froms,
