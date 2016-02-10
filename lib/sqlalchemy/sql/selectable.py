@@ -1195,6 +1195,15 @@ class CTE(Generative, HasSuffixes, Alias):
             self._suffixes = _suffixes
         super(CTE, self).__init__(selectable, name=name)
 
+    @util.dependencies("sqlalchemy.sql.dml")
+    def _populate_column_collection(self, dml):
+        if isinstance(self.element, dml.UpdateBase):
+            for col in self.element._returning:
+                col._make_proxy(self)
+        else:
+            for col in self.element.columns._all_columns:
+                col._make_proxy(self)
+
     def alias(self, name=None, flat=False):
         return CTE(
             self.original,

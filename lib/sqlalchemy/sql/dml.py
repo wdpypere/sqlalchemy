@@ -144,16 +144,6 @@ class UpdateBase(
         """
         self._returning = cols
 
-    @util.memoized_property
-    def columns(self):
-        """A select-style column collection from the RETURNING
-        expression of this clause."""
-
-        self._columns = ColumnCollection()
-        for col in self._returning:
-            col._make_proxy(self)
-        return self._columns.as_immutable()
-
     @_generative
     def with_hint(self, text, selectable=None, dialect_name="*"):
         """Add a table hint for a single table to this
