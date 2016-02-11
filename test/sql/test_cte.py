@@ -607,3 +607,36 @@ class CTETest(fixtures.TestBase, AssertsCompiledSQL):
             "(SELECT included_parts.part FROM included_parts) "
             "RETURNING parts.part"
         )
+
+    def test_insert_in_the_cte(self):
+        products = table('products', column('id'), column('price'))
+
+        cte = products.insert().values(id=1, price=27.0).\
+            returning(*products.c).cte('pd')
+
+        stmt = select([cte])
+
+        self.assert_compile(
+            stmt,
+            "WITH pd AS "
+            "(INSERT INTO products (id, price) VALUES (:id, :price) "
+            "RETURNING products.id, products.price) "
+            "SELECT pd.id, pd.price "
+            "FROM pd"
+        )
+
+    def test_update_pulls_from_cte(self):
+        products = table('products', column('id'), column('price'))
+
+        cte = products.select().cte('pd')
+
+        stmt = products.update().where(products.c.price == cte.c.price)
+
+        self.assert_compile(
+            stmt,
+            "WITH pd AS "
+            "(SELECT products.id AS id, products.price AS price "
+            "FROM products) "
+            "UPDATE products SET id=:id, price=:price FROM pd "
+            "WHERE products.price = pd.price"
+        )
