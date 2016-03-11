@@ -122,7 +122,7 @@ def run_setup(with_cext):
         else:
             kwargs['ext_modules'] = ext_modules
 
-    setup(name="SQLAlchemy",
+    setup(name="python-SQLAlchemy",
           version=VERSION,
           description="Database Abstraction Library",
           author="Mike Bayer",
